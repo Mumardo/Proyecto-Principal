@@ -4,10 +4,7 @@ from mimetypes import guess_type
 from pathlib import Path
 from dataclasses import replace
 from functools import lru_cache
-import base64
-import binascii
 import gzip
-import hmac
 import json
 from math import isfinite
 import os
@@ -75,26 +72,9 @@ SUPABASE_URL = os.environ.get(
     "SUPABASE_URL", "https://twhszjxhmimqlzthlbgy.supabase.co"
 ).rstrip("/")
 SUPABASE_PUBLISHABLE_KEY = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "")
-APP_ACCESS_PASSWORD = os.environ.get("APP_ACCESS_PASSWORD", "")
 REPOSITORY = RepositorioExcelPrendas(MATRIX_PATH)
 VARIABLES = REPOSITORY.cargar_variables()
 STANDARD_SIZES = RepositorioTallasEstandar(SIZE_CHART_PATH).cargar()
-
-
-def _is_valid_access_authorization(header: str, password: str) -> bool:
-    scheme, separator, encoded_credentials = header.partition(" ")
-    if scheme.lower() != "basic" or not separator:
-        return False
-    try:
-        credentials = base64.b64decode(encoded_credentials, validate=True)
-    except (binascii.Error, ValueError):
-        return False
-    username, separator, supplied_password = credentials.partition(b":")
-    return (
-        bool(separator)
-        and hmac.compare_digest(username, b"medidas")
-        and hmac.compare_digest(supplied_password, password.encode("utf-8"))
-    )
 VESTUA_IMAGES_PATH = ROOT / "data" / "vestua_images.json"
 with VESTUA_IMAGES_PATH.open(encoding="utf-8") as image_file:
     VESTUA_IMAGES = json.load(image_file)
@@ -1395,22 +1375,6 @@ class MedidasRequestHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/healthz":
             self._send_content("ok", "text/plain; charset=utf-8")
-            return
-        access_password = os.environ.get("APP_ACCESS_PASSWORD", "")
-        if os.environ.get("RENDER", "").lower() == "true" and not access_password:
-            self.send_error(503, "Falta configurar APP_ACCESS_PASSWORD")
-            return
-        if access_password and not _is_valid_access_authorization(
-            self.headers.get("Authorization", ""),
-            access_password,
-        ):
-            self.send_response(401)
-            self.send_header(
-                "WWW-Authenticate",
-                'Basic realm="Medidas privada", charset="UTF-8"',
-            )
-            self.send_header("Content-Length", "0")
-            self.end_headers()
             return
         if parsed.path == "/api/catalog":
             query = {

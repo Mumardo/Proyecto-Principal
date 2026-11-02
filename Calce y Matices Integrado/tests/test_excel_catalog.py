@@ -1,16 +1,10 @@
 import unittest
 import json
-import base64
-import os
 from math import isfinite
 from html import escape
-from http.client import HTTPConnection
-from http.server import ThreadingHTTPServer
 from pathlib import Path
 import re
 import tempfile
-import threading
-from unittest.mock import patch
 
 from medidas.perfil_medidas import PerfilMedidas
 from medidas.tallas import RepositorioTallasEstandar, recomendar_tallas
@@ -27,10 +21,8 @@ from web.servidor import (
     VESTUA_PRODUCTS,
     WOMENSWEAR_DATA,
     WOMENSWEAR_PRODUCTS,
-    MedidasRequestHandler,
     _is_footwear,
     _load_environment_file,
-    _is_valid_access_authorization,
     _catalog_page_data,
     _catalog_recommendations,
     _reference_for_listing,
@@ -658,74 +650,13 @@ class ExcelCatalogTests(unittest.TestCase):
         self.assertIn('window.addEventListener("matices:restore-photo"', app_script)
         self.assertNotIn("service_role", schema)
 
-    def test_private_hosting_requires_basic_authentication(self):
-        password = "test-private-password"
-        credentials = base64.b64encode(
-            f"medidas:{password}".encode("utf-8")
-        ).decode("ascii")
-        valid_header = f"Basic {credentials}"
-
-        self.assertTrue(_is_valid_access_authorization(valid_header, password))
-        self.assertFalse(_is_valid_access_authorization("", password))
-        self.assertFalse(_is_valid_access_authorization(valid_header, "another-password"))
-        self.assertFalse(_is_valid_access_authorization("Basic invalid", password))
-        self.assertFalse(_is_valid_access_authorization("Bearer token", password))
-
-        render_config = (ROOT / "render.yaml").read_text(encoding="utf-8")
+    def test_render_blueprint_is_public_and_free(self):
+        render_config = (ROOT.parent / "render.yaml").read_text(encoding="utf-8")
         self.assertIn("plan: free", render_config)
+        self.assertIn("name: calce-matices-publica", render_config)
         self.assertIn("healthCheckPath: /healthz", render_config)
-        self.assertIn("key: APP_ACCESS_PASSWORD", render_config)
-
-    def test_private_hosting_http_gate_and_health_check(self):
-        password = "test-private-password"
-        credentials = base64.b64encode(
-            f"medidas:{password}".encode("utf-8")
-        ).decode("ascii")
-        server = ThreadingHTTPServer(("127.0.0.1", 0), MedidasRequestHandler)
-        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
-        server_thread.start()
-        try:
-            with patch.dict(
-                os.environ,
-                {"RENDER": "true", "APP_ACCESS_PASSWORD": password},
-            ):
-                connection = HTTPConnection("127.0.0.1", server.server_port)
-                connection.request("GET", "/")
-                response = connection.getresponse()
-                self.assertEqual(response.status, 401)
-                self.assertIn("Basic", response.getheader("WWW-Authenticate"))
-                response.read()
-                connection.close()
-
-                connection = HTTPConnection("127.0.0.1", server.server_port)
-                connection.request(
-                    "GET",
-                    "/",
-                    headers={"Authorization": f"Basic {credentials}"},
-                )
-                response = connection.getresponse()
-                self.assertEqual(response.status, 200)
-                response.read()
-                connection.close()
-
-                connection = HTTPConnection("127.0.0.1", server.server_port)
-                connection.request("GET", "/healthz")
-                response = connection.getresponse()
-                self.assertEqual(response.status, 200)
-                self.assertEqual(response.read(), b"ok")
-                connection.close()
-
-            with patch.dict(os.environ, {"RENDER": "true"}, clear=True):
-                connection = HTTPConnection("127.0.0.1", server.server_port)
-                connection.request("GET", "/")
-                response = connection.getresponse()
-                self.assertEqual(response.status, 503)
-                response.read()
-                connection.close()
-        finally:
-            server.shutdown()
-            server.server_close()
-            server_thread.join()
+        self.assertNotIn("APP_ACCESS_PASSWORD", render_config)
+        self.assertIn("rootDir: Calce y Matices Integrado", render_config)
 
     def test_local_env_file_loads_values_without_overriding_existing_environment(self):
         with tempfile.TemporaryDirectory() as directory:

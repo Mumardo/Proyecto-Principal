@@ -38,27 +38,23 @@ de instalar las dependencias de Python. Para detener el servidor, presiona
 El acceso a la cámara requiere permiso del navegador y un contexto seguro:
 usa `localhost` en este equipo o sirve la aplicación mediante HTTPS.
 
-## Publicación privada gratuita en Render
+## Publicar gratis en Render
 
-`render.yaml` prepara un servicio web gratuito con un subdominio HTTPS
-`*.onrender.com`. Antes de desplegar, sube el contenido de esta carpeta a un
-repositorio **privado** de GitHub, sin incluir `.env`, y conecta ese repositorio
-en Render mediante **New → Blueprint**. Render leerá el archivo `render.yaml`;
-durante la configuración, define `APP_ACCESS_PASSWORD` y
-`SUPABASE_PUBLISHABLE_KEY` como variables secretas en el panel de Render. No
-las pongas en el repositorio ni las compartas en mensajes.
+El archivo [`../render.yaml`](../render.yaml) configura un servicio web
+gratuito con un subdominio HTTPS de `onrender.com`. Sube este repositorio a
+GitHub y, en Render, selecciona **New → Blueprint** y conecta el repositorio.
+Render leerá la configuración y solicitará `SUPABASE_PUBLISHABLE_KEY` como
+variable de entorno; usa la clave publishable/anon, nunca `service_role`.
 
-La app pide autenticación HTTP Basic antes de servir contenido. El usuario es
-`medidas`; usa una contraseña larga y única. Quienes autorices deberán usar la
-misma contraseña para abrir la app. Si Render no tiene `APP_ACCESS_PASSWORD`,
-la app falla de forma cerrada y no sirve el sitio. La contraseña de acceso web
-es independiente de las cuentas de Supabase. Los servicios gratuitos de Render
-pueden suspenderse tras inactividad y tardar en despertar.
+La página será pública, pero las medidas, paletas y fotos de las cuentas siguen
+protegidas por la autenticación y RLS de Supabase. Después del primer despliegue,
+agrega `https://<subdominio>.onrender.com/**` a **Supabase → Authentication →
+URL Configuration → Redirect URLs** para permitir confirmaciones e inicios de
+sesión desde el dominio publicado.
 
-Cuando Render muestre la URL `https://<servicio>.onrender.com`, agrégala a
-**Supabase → Authentication → URL Configuration → Redirect URLs**, por ejemplo
-`https://<servicio>.onrender.com/**`. La base de datos y el bucket de fotos
-siguen siendo los de Supabase; no uses una clave `service_role`.
+El plan gratuito puede suspender el servicio tras un período sin actividad y
+demorar su reactivación. Los datos persistentes de perfiles y fotos permanecen
+en Supabase, no en el disco temporal de Render.
 
 ## Conexión con Supabase
 
