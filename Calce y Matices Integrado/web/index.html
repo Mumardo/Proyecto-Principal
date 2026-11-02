@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f4ef">
+  <meta name="supabase-url" content="{supabase_url}">
+  <meta name="supabase-publishable-key" content="{supabase_publishable_key}">
+  <title>Calce — recomendaciones por medidas</title>
+  <link rel="stylesheet" href="/styles.css?v=wizard-27">
+</head>
+<body>
+  <header><div class="wrap nav">
+    <div class="brandmark"><span class="mark">c</span> calce</div>
+    <div class="nav-note">Una mejor compra empieza por conocerte.</div>
+    <div class="nav-actions">
+      <nav class="page-tabs" aria-label="Secciones principales">
+        <a class="nav-auth-button" href="{sign_in_url}" data-open-account="sign-in"{sign_in_link_current}>Iniciar sesión</a>
+        <a class="nav-auth-button nav-auth-button-primary" href="{sign_up_url}" data-open-account="sign-up"{sign_up_link_current}>Crear cuenta</a>
+        <a id="home-link" href="{home_tab_url}"{home_link_current}>Inicio</a>
+        <a id="catalog-link" href="{catalog_tab_url}"{catalog_link_current}>Catálogo</a>
+      </nav>
+      <details class="profile-menu" data-profile-menu hidden>
+        <summary aria-label="Abrir menú de perfil">
+          <span class="profile-menu-avatar" aria-hidden="true">c</span>
+          <span>Mi perfil</span>
+          <span class="profile-menu-chevron" aria-hidden="true">⌄</span>
+        </summary>
+        <div class="profile-menu-content">
+          <p data-profile-email hidden></p>
+          <a href="/?wizard_step=2" data-profile-edit hidden>Modificar perfil</a>
+          <button type="button" data-supabase-sign-out hidden>Cerrar sesión</button>
+        </div>
+      </details>
+    </div>
+  </div></header>
+  {startup_dialogs}
+  <main><div class="wrap">
+    <div id="home-panel" data-page-panel="home"{home_panel_hidden}>
+    <section id="style-wizard" class="style-wizard" aria-labelledby="wizard-title">
+      <div class="wizard-shell">
+        <header class="wizard-header">
+          <div class="wizard-heading">
+            <span class="eyebrow">Calce · Matices</span>
+            <h1 id="wizard-title">Tu guía personal</h1>
+          </div>
+          <div class="wizard-progress" aria-label="Progreso del diagnóstico">
+            <div class="wizard-progress-bar" role="progressbar"
+              aria-label="Progreso del diagnóstico" aria-valuemin="1" aria-valuemax="3"
+              aria-valuenow="1">
+              <span data-wizard-progress-fill></span>
+            </div>
+            <div class="wizard-progress-steps">
+              <span class="is-active">1 · Foto</span>
+              <span>2 · Medidas</span>
+              <span>3 · Resumen</span>
+            </div>
+          </div>
+        </header>
+        <form method="get" action="/" data-style-wizard-form>
+          <input type="hidden" name="wizard_step" value="{wizard_step}">
+          <section class="wizard-step" data-wizard-panel="1" aria-labelledby="wizard-photo-title">
+            <div class="matices-photo-panel">
+              <div class="help-heading"><h2 id="wizard-photo-title">Toma o selecciona una foto</h2></div>
+              <p class="sub">Usa una foto con buena luz y el rostro visible para obtener una orientación de color.</p>
+              <div class="matices-photo-actions">
+                <button class="matices-button matices-button-primary" type="button"
+                  data-camera-open>Tomar foto</button>
+                <label class="matices-upload-box" for="matices-photo-input">
+                  <input id="matices-photo-input" type="file" accept="image/*">
+                  <span>Elegir foto</span>
+                </label>
+              </div>
+              <div class="matices-camera" data-camera-panel hidden>
+                <video id="matices-camera-video" class="matices-camera-preview" autoplay playsinline muted
+                  aria-label="Vista en vivo de la cámara"></video>
+                <div class="matices-camera-actions">
+                  <button class="matices-button matices-button-primary" type="button"
+                    data-camera-capture>Capturar foto</button>
+                  <button class="matices-button" type="button" data-camera-cancel>Cancelar</button>
+                </div>
+              </div>
+              <div class="matices-preview-box" id="matices-preview-box" hidden>
+                <img id="matices-preview" alt="Vista previa de la foto seleccionada">
+                <button class="matices-preview-remove" type="button" data-photo-remove
+                  aria-label="Eliminar imagen" title="Eliminar imagen">−</button>
+              </div>
+              <div class="matices-remember" id="matices-remember-row" hidden>
+                <label for="matices-remember"><input id="matices-remember" type="checkbox"> Recuérdame</label>
+                <span id="matices-remember-status" role="status" aria-live="polite"></span>
+                <small>Con una cuenta iniciada, la foto, las medidas y la paleta se vinculan a tu cuenta y se recuperan al volver a entrar. Sin sesión, se conservan en este dispositivo.</small>
+              </div>
+              <p id="matices-status" class="matices-status" aria-live="polite">La foto se analiza al presionar Siguiente.</p>
+            </div>
+            <div class="wizard-actions wizard-actions-end">
+              <button id="matices-next-step" class="matices-button matices-button-primary"
+                type="button" disabled>Siguiente</button>
+            </div>
+          </section>
+          <section class="wizard-step" data-wizard-panel="2" aria-labelledby="wizard-measures-title" hidden>
+            <div class="wizard-step-heading">
+              <span class="eyebrow">Paso 2 de 3</span>
+              <h2 id="wizard-measures-title">Medidas corporales</h2>
+              <p class="sub">Introduce tus medidas en centímetros. Puedes dejar alguna vacía.</p>
+            </div>
+            <section class="wizard-filters" aria-label="Medidas corporales">
+              <div class="measurements">{measurement_fields}</div>
+              <div class="remember-me">
+                <label for="remember-me"><input id="remember-me" type="checkbox"> Recordar medidas</label>
+                <span id="remember-status" role="status" aria-live="polite"></span>
+              </div>
+              <div class="wizard-actions">
+                <button class="matices-button wizard-back" type="button" data-wizard-back>Volver a la foto</button>
+                <button class="matices-button matices-button-primary" type="button" data-wizard-next="3">Ver resumen</button>
+              </div>
+            </section>
+          </section>
+          <section class="wizard-step" data-wizard-panel="3" aria-labelledby="wizard-summary-title" hidden>
+            <div class="wizard-step-heading">
+              <span class="eyebrow">Paso 3 de 3</span>
+              <h2 id="wizard-summary-title">Resumen de tu diagnóstico</h2>
+              <p class="sub">Revisa tu paleta y las tallas estimadas según tus medidas.</p>
+            </div>
+            <section class="wizard-summary" aria-label="Resumen de paleta y tallas">
+              <h3>Tu diagnóstico</h3>
+              <div class="wizard-summary-grid">
+                <details class="wizard-summary-details" data-palette-summary open>
+                  <summary>Paleta recomendada</summary>
+                  <div class="wizard-summary-content">
+                    <p class="wizard-summary-status" data-palette-summary-status>
+                      Completa el análisis de la foto para ver tu paleta.
+                    </p>
+                    <div class="wizard-summary-swatches" data-palette-summary-colors></div>
+                  </div>
+                </details>
+                <details class="wizard-summary-details" data-size-summary open>
+                  <summary>Tallas según tabla estándar</summary>
+                  <div class="wizard-summary-content">
+                    <p class="wizard-summary-status" data-size-summary-status>
+                      Completa tus medidas para consultar tallas compatibles o cercanas.
+                    </p>
+                    <div class="wizard-summary-sizes" data-size-summary-sizes></div>
+                    <ul class="wizard-summary-measures" data-size-summary-measures></ul>
+                    <p class="wizard-summary-note">
+                      Estimación basada en busto, cintura y cadera; consulta la tabla estándar completa al final de esta página.
+                    </p>
+                  </div>
+                </details>
+              </div>
+            </section>
+            <div class="wizard-actions">
+              <button class="matices-button wizard-back" type="button" data-wizard-back>Volver a las medidas</button>
+            </div>
+            <div class="wizard-catalog-action">
+              <p class="sub">Al continuar, el catálogo usará tus medidas para estimar cómo podrían quedarte las prendas. Allí podrás filtrar, seleccionar y comparar varias opciones.</p>
+              <button class="matices-button matices-button-primary" type="submit"
+                name="view" value="catalog">Cerrar asistente e ir al catálogo</button>
+            </div>
+          </section>
+        </form>
+        <section class="supabase-account supabase-account-page" data-account-panel
+          aria-labelledby="supabase-account-title" hidden>
+          <div class="wizard-step-heading">
+            <span class="eyebrow">Cuenta personal</span>
+            <h2 id="supabase-account-title">Tu cuenta personal</h2>
+            <p class="sub">Sincroniza de forma privada tus medidas y paleta.</p>
+          </div>
+          <div class="supabase-auth-brand">
+            <span class="supabase-auth-mark" aria-hidden="true">c</span>
+            <div>
+              <span class="eyebrow">Calce · Matices</span>
+              <h3>Tu estilo, siempre contigo</h3>
+            </div>
+          </div>
+          <p class="sub" data-auth-description>Inicia sesión para sincronizar de forma privada tus medidas y paleta.</p>
+          <div class="supabase-auth-form" data-supabase-auth-form>
+            <div class="supabase-auth-tabs" role="group" aria-label="Tipo de acceso">
+              <button class="supabase-auth-tab is-active" type="button"
+                data-auth-mode="sign-in" aria-pressed="true">Iniciar sesión</button>
+              <button class="supabase-auth-tab" type="button"
+                data-auth-mode="sign-up" aria-pressed="false">Crear cuenta</button>
+            </div>
+            <div class="supabase-auth-fields">
+              <label for="supabase-email">Correo electrónico
+                <input id="supabase-email" type="email" autocomplete="email"
+                  placeholder="tu@correo.com" required>
+              </label>
+              <label for="supabase-password">Contraseña
+                <input id="supabase-password" type="password" autocomplete="current-password"
+                  placeholder="Mínimo 8 caracteres" minlength="8" required>
+              </label>
+              <label class="supabase-confirm-password" for="supabase-password-confirm" hidden>
+                Confirmar contraseña
+                <input id="supabase-password-confirm" type="password"
+                  autocomplete="new-password" placeholder="Repite tu contraseña">
+              </label>
+            </div>
+            <label class="supabase-remember-session" data-remember-session-row for="supabase-remember-session">
+              <input id="supabase-remember-session" type="checkbox">
+              <span>Recuérdame</span>
+            </label>
+            <div class="supabase-auth-actions">
+              <button class="matices-button matices-button-primary" type="button"
+                data-supabase-sign-in>Iniciar sesión</button>
+              <button class="matices-button matices-button-primary" type="button"
+                data-supabase-sign-up hidden>Crear cuenta gratis</button>
+            </div>
+          </div>
+          <p id="supabase-auth-status" role="status" aria-live="polite"></p>
+          <div class="wizard-actions wizard-actions-end">
+            <button class="matices-button" type="button" data-account-back>Volver a la guía</button>
+          </div>
+        </section>
+      </div>
+    </section>
+    <section class="results-panel wizard-page-results" aria-label="Resultados de calce"{wizard_page_results_hidden}>
+      {results_panel_content}
+    </section>
+    {alternative_recommendations}
+    {store_recommendations}
+    {size_chart}
+    <section class="section">
+      <details class="variable-details">
+        <summary class="section-title variable-details-summary">
+          <div class="eyebrow">Detrás de cada recomendación</div>
+          <span class="variable-details-indicator" aria-hidden="true"></span>
+        </summary>
+        <div class="catalog-panel">
+          <h2 class="variable-details-title">14 detalles que cambian el calce</h2>
+          <div class="variable-grid">{variables}</div>
+        </div>
+      </details>
+    </section>
+    </div>
+    <section id="catalog-panel" data-page-panel="catalog"{catalog_panel_hidden}>
+      {garment_catalog}
+    </section>
+  </div></main>
+  <script src="/app.js?v=wizard-32" defer></script>
+</body>
+</html>

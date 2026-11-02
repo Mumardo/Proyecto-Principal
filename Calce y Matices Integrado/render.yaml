@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: calce-matices-privada
+    runtime: python
+    plan: free
+    buildCommand: python -m pip install -r requirements.txt
+    startCommand: python app.py
+    healthCheckPath: /healthz
+    envVars:
+      - key: APP_ACCESS_PASSWORD
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false

@@ -1,0 +1,242 @@
+{
+  "Zara": {
+    "Blusa": {
+      "product_title": "Camisa Zara",
+      "product_size": "XS",
+      "product_url": "https://www.vestua.cl/store/product/3067824/camisa-zara",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/10/21/3067824/ai-photo-186fdb41-94e6-4421-86cc-93b254958e7e.png"
+    },
+    "Polera": {
+      "product_title": "Polera Zara",
+      "product_size": "M",
+      "product_url": "https://www.vestua.cl/store/product/3008598/polera-zara",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/08/26/3008598/ai-photo-5cfa877e-fe36-4ddc-91a9-f2d2df70c933.png"
+    },
+    "Jeans": {
+      "product_title": "Jeans Zara",
+      "product_size": "38",
+      "product_url": "https://www.vestua.cl/store/product/3068739/jeans-zara",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/10/21/3068739/ai-photo-f51d858e-6103-48de-887d-d6fd648ab809.png"
+    },
+    "Pantalon": {
+      "product_title": "Pantalón Zara",
+      "product_size": "M",
+      "product_url": "https://www.vestua.cl/store/product/3029369/pantalon-zara",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/09/16/3029369/ai-photo-2cddf254-0878-4cad-b104-b17b9cd235d2.png"
+    },
+    "Vestido": {
+      "product_title": "Vestido Zara",
+      "product_size": "XS",
+      "product_url": "https://www.vestua.cl/store/product/3033918/vestido-zara",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/09/23/3033918/ai-photo-56d04db4-22aa-4656-8b38-ad1989bbea6a.png"
+    },
+    "Blazer": {
+      "product_title": "Blazer Zara",
+      "product_size": "L",
+      "product_url": "https://www.vestua.cl/store/product/3068204/blazer-zara",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/10/21/3068204/ai-photo-02b89db8-bfaa-4d2a-ae24-d00f6295931c.png"
+    },
+    "Top Deportivo": {
+      "product_title": "Peto Zara",
+      "product_size": "M",
+      "product_url": "https://www.vestua.cl/store/product/3024110/peto-zara",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/09/09/3024110/ai-photo-4b0e0712-c4a2-41fd-9918-d5e8d66db64b.png"
+    }
+  },
+  "H&M": {
+    "Blusa": {
+      "product_title": "Blusa H&M",
+      "product_size": "L",
+      "product_url": "https://www.vestua.cl/store/product/3016938/blusa-handm",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/09/02/3016938/ai-photo-ebce8a8b-1658-4175-8912-5ecc4471abbf.png"
+    },
+    "Polera": {
+      "product_title": "Polera H&M",
+      "product_size": "S",
+      "product_url": "https://www.vestua.cl/store/product/3044296/polera-handm",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/09/29/3044296/ai-photo-480e0089-ac22-4c43-9b1e-b9f1329c79d7.png"
+    },
+    "Jeans": {
+      "product_title": "Jeans H&M",
+      "product_size": "38",
+      "product_url": "https://www.vestua.cl/store/product/3065148/jeans-handm",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/10/16/3065148/ai-photo-c19686c8-77da-44be-9ed8-9701bc7d06ff.png"
+    },
+    "Pantalon": {
+      "product_title": "Pantalón H&M",
+      "product_size": "M",
+      "product_url": "https://www.vestua.cl/store/product/3066619/pantalon-handm",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/10/21/3066619/ai-photo-f7294eb1-b440-4d74-98f2-11ba7c36f55c.png"
+    },
+    "Vestido": {
+      "product_title": "Vestido H&M",
+      "product_size": "S",
+      "product_url": "https://www.vestua.cl/store/product/3015925/vestido-handm",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/09/02/3015925/ai-photo-3457c08a-4de8-4a78-ba97-647a5cddf888.png"
+    },
+    "Blazer": {
+      "product_title": "Blazer H&M",
+      "product_size": "XS",
+      "product_url": "https://www.vestua.cl/store/product/3068141/blazer-handm",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/10/20/3068141/ai-photo-3caa80ba-ce2a-48a5-b3b3-ae2f39366b2a.png"
+    },
+    "Top Deportivo": {
+      "product_title": "Peto H&M",
+      "product_size": "M",
+      "product_url": "https://www.vestua.cl/store/product/3036882/peto-handm",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/09/23/3036882/ai-photo-5d2067b1-9919-4907-a8c9-395f30d8ebd2.png"
+    }
+  },
+  "Mango": {
+    "Blusa": {
+      "product_title": "Blusa Mango",
+      "product_size": "S",
+      "product_url": "https://www.vestua.cl/store/product/3038312/blusa-mango",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/09/24/3038312/ai-photo-ada39b71-c324-4165-88fc-64c95a7716f8.png"
+    },
+    "Polera": {
+      "product_title": "Polera Mango",
+      "product_size": "S",
+      "product_url": "https://www.vestua.cl/store/product/3029410/polera-mango",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/09/16/3029410/ai-photo-ac895056-1ad8-4492-a9b9-a391f549ef07.png"
+    },
+    "Jeans": {
+      "product_title": "Jeans Mango",
+      "product_size": "34",
+      "product_url": "https://www.vestua.cl/store/product/3024082/jeans-mango",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/09/09/3024082/ai-photo-21d7963a-c710-499d-ba52-0aff99890514.png"
+    },
+    "Pantalon": {
+      "product_title": "Pantalón Mango",
+      "product_size": "38",
+      "product_url": "https://www.vestua.cl/store/product/3066922/pantalon-mango",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/10/21/3066922/ai-photo-7e20775e-bcba-477e-a8f9-3be6dbf241f2.png"
+    },
+    "Vestido": {
+      "product_title": "Vestido Mango",
+      "product_size": "L",
+      "product_url": "https://www.vestua.cl/store/product/3068316/vestido-mango",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/10/21/3068316/ai-photo-3c5ce9ab-fc06-4229-9a7c-6ebddfa3588c.png"
+    },
+    "Blazer": {
+      "product_title": "Blazer Mango",
+      "product_size": "S",
+      "product_url": "https://www.vestua.cl/store/product/3014141/blazer-mango",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/09/02/3014141/ai-photo-05bd2cd6-61f9-4c40-9d87-106f4b656354.png"
+    },
+    "Top Deportivo": {
+      "product_title": "Peto Mango",
+      "product_size": "S",
+      "product_url": "https://www.vestua.cl/store/product/3037952/peto-mango",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/09/23/3037952/ai-photo-b92cbffd-4d19-41ba-a5fd-2b7fff71c41c.png"
+    }
+  },
+  "ASOS": {
+    "Blusa": {
+      "product_title": "Camisa Asos",
+      "product_size": "L",
+      "product_url": "https://www.vestua.cl/store/product/3060250/camisa-asos",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/10/14/3060250/ai-photo-f7b4eedb-67f6-42eb-8d9d-92176ce95e14.png"
+    },
+    "Jeans": {
+      "product_title": "Jeans Asos",
+      "product_size": "48",
+      "product_url": "https://www.vestua.cl/store/product/2976054/jeans-asos",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/08/26/2976054/ai-photo-81d2ab0f-043a-45a2-afd7-23254d0d1be0.png"
+    },
+    "Pantalon": {
+      "product_title": "Pantalón Asos",
+      "product_size": "36",
+      "product_url": "https://www.vestua.cl/store/product/3046588/pantalon-asos",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/10/01/3046588/ai-photo-b1c3c752-d1bb-4780-81a1-d1bdd7c5a9b1.png"
+    },
+    "Vestido": {
+      "product_title": "Vestido Asos",
+      "product_size": "S",
+      "product_url": "https://www.vestua.cl/store/product/3011322/vestido-asos",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/09/01/3011322/ai-photo-c0e4ea3b-b22a-451d-a840-f4957356d27c.png"
+    },
+    "Blazer": {
+      "product_title": "Blazer Asos",
+      "product_size": "L",
+      "product_url": "https://www.vestua.cl/store/product/3014059/blazer-asos",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/09/02/3014059/ai-photo-84a14f4f-9219-47c3-a2fc-c1ba9d62e093.png"
+    },
+    "Top Deportivo": {
+      "product_title": "Peto Asos",
+      "product_size": "M",
+      "product_url": "https://www.vestua.cl/store/product/3036960/peto-asos",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/09/23/3036960/ai-photo-6d8531a0-afae-4dc1-94db-76f55d843bb7.png"
+    }
+  },
+  "Levi's": {
+    "Blusa": {
+      "product_title": "Camisa Levi's",
+      "product_size": "XS",
+      "product_url": "https://www.vestua.cl/store/product/3056254/camisa-levis",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/10/08/3056254/ai-photo-f6855490-7242-4918-998c-b9dd4b7f9651.png"
+    },
+    "Polera": {
+      "product_title": "Polera Levi's",
+      "product_size": "L",
+      "product_url": "https://www.vestua.cl/store/product/3035803/polera-levis",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/09/23/3035803/ai-photo-82f31cdc-399a-43f5-871b-26362552bfa3.png"
+    },
+    "Jeans": {
+      "product_title": "Jeans Levi's",
+      "product_size": "40",
+      "product_url": "https://www.vestua.cl/store/product/3034195/jeans-levis",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/09/23/3034195/ai-photo-ec92ced9-a79c-4fee-b18c-63643d35c658.png"
+    },
+    "Pantalon": {
+      "product_title": "Pantalón Levi's",
+      "product_size": "38",
+      "product_url": "https://www.vestua.cl/store/product/3047328/pantalon-levis",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/10/01/3047328/ai-photo-8e8414fc-8602-4845-ac68-0bccdb7b44e0.png"
+    },
+    "Vestido": {
+      "product_title": "Vestido Levi's",
+      "product_size": "S",
+      "product_url": "https://www.vestua.cl/store/product/2955383/vestido-levis",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/10/09/2955383/ai-photo-a6b2f816-f9aa-40c0-85d9-7f87232b6a9e.png"
+    },
+    "Top Deportivo": {
+      "product_title": "Crop Top Levi's",
+      "product_size": "XS",
+      "product_url": "https://www.vestua.cl/store/product/3057656/crop-top-levis",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/10/08/3057656/ai-photo-c43cfbf9-d865-4ee3-b322-6333f480b3db.png"
+    }
+  },
+  "Nike": {
+    "Blusa": {
+      "product_title": "Blusa Nike",
+      "product_size": "S",
+      "product_url": "https://www.vestua.cl/store/product/2660532/blusa-nike",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/09/13/2660532/ai-photo-9607cee8-b068-4fc8-90e5-61d4cbf3439c.png"
+    },
+    "Polera": {
+      "product_title": "Polera Nike",
+      "product_size": "S",
+      "product_url": "https://www.vestua.cl/store/product/3042485/polera-nike",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/09/30/3042485/ai-photo-920b6190-2063-46fe-91a4-33b805f24fa6.png"
+    },
+    "Pantalon": {
+      "product_title": "Pantalón Nike",
+      "product_size": "L",
+      "product_url": "https://www.vestua.cl/store/product/3041306/pantalon-nike",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/09/25/3041306/ai-photo-5b403bdc-2048-4129-86c8-8fd943665276.png"
+    },
+    "Vestido": {
+      "product_title": "Vestido Nike",
+      "product_size": "XS",
+      "product_url": "https://www.vestua.cl/store/product/2990936/vestido-nike",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/08/28/2990936/ai-photo-c786886d-9f4b-4f09-9647-f2b265c1949f.png"
+    },
+    "Top Deportivo": {
+      "product_title": "Peto Nike",
+      "product_size": "L",
+      "product_url": "https://www.vestua.cl/store/product/3030734/peto-nike",
+      "image_url": "https://alvaro-cl-prod.s3.amazonaws.com/products/2026/09/16/3030734/ai-photo-6fbd1d4e-a4ad-417d-a831-123ddcd1d4f4.png"
+    }
+  }
+}
