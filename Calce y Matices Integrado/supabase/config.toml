@@ -1,0 +1,2 @@
+[functions.aiuta-try-on]
+verify_jwt = false

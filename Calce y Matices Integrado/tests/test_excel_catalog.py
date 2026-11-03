@@ -311,6 +311,7 @@ class ExcelCatalogTests(unittest.TestCase):
         self.assertIn('value="fit-asc" selected>Mejor calce</option>', catalog)
         self.assertIn('value="fit-desc">Peor calce</option>', catalog)
         self.assertIn('data-catalog-select', catalog)
+        self.assertIn("Probar virtualmente", catalog)
         self.assertNotIn("consulta del 2026-10-29", catalog)
         self.assertNotIn(
             "El calce es una estimación con medidas de referencia",
@@ -636,6 +637,15 @@ class ExcelCatalogTests(unittest.TestCase):
         self.assertIn("remember_measurements boolean not null default false", schema)
         self.assertIn("remember_photo boolean not null default false", schema)
         self.assertIn("photo_path text", schema)
+        self.assertIn("create table if not exists public.aiuta_try_on_operations", schema)
+        self.assertIn("alter table public.aiuta_try_on_operations enable row level security", schema)
+        self.assertIn('create policy "Users can read their own Aiuta operations"', schema)
+        self.assertIn("bucket_id = 'aiuta-try-on-uploads'", schema)
+        self.assertIn('supabaseClient.functions.invoke("aiuta-try-on"', app_script)
+        self.assertIn('action: "status"', app_script)
+        self.assertIn("await saveTryOnPhoto(selectedPhoto)", app_script)
+        self.assertIn("const file = sourcePhoto || imageInput.files?.[0]", app_script)
+        self.assertIn("Se usará la foto seleccionada en Inicio.", app_script)
         self.assertIn("insert into storage.buckets", schema)
         self.assertIn("bucket_id = 'user-profile-photos'", schema)
         self.assertIn("(storage.foldername(name))[1] = (select auth.uid())::text", schema)
@@ -712,10 +722,15 @@ class ExcelCatalogTests(unittest.TestCase):
     def test_catalog_and_home_are_separate_linked_views(self):
         home_page = renderizar_pagina({})
         catalog_page = renderizar_pagina({"view": "catalog"})
+        try_on_page = renderizar_pagina({"view": "try-on", "sku_id": "sku-123"})
 
         self.assertIn('action="/"', home_page)
         self.assertIn("Abrir catálogo completo", home_page)
         self.assertIn('href="/?view=catalog&amp;preference=regular"', home_page)
+        self.assertIn(
+            'href="/?view=try-on">Probador</a>',
+            home_page,
+        )
         self.assertIn('<nav class="page-tabs" aria-label="Secciones principales">', home_page)
         self.assertIn('href="/" aria-current="page">Inicio</a>', home_page)
         self.assertIn('href="/?view=catalog" aria-current="page">Catálogo</a>', catalog_page)
@@ -726,6 +741,14 @@ class ExcelCatalogTests(unittest.TestCase):
         self.assertIn('data-page-panel="catalog" hidden', home_page)
         self.assertIn('data-page-panel="home" hidden', catalog_page)
         self.assertIn('data-page-panel="catalog"', catalog_page)
+        self.assertIn('id="try-on-link" href="/?view=try-on&amp;sku_id=sku-123" aria-current="page">Probador</a>', try_on_page)
+        self.assertIn('data-page-panel="try-on"', try_on_page)
+        self.assertIn('data-aiuta-try-on aria-labelledby="aiuta-try-on-title"', try_on_page)
+        self.assertIn('data-aiuta-generate', try_on_page)
+        self.assertIn('Modo prueba sin sesión habilitado', try_on_page)
+        self.assertIn('value="sku-123"', try_on_page)
+        self.assertIn('id="catalog-panel" data-page-panel="catalog" hidden', try_on_page)
+        self.assertIn('data-page-panel="home" hidden', try_on_page)
         self.assertIn('id="garment-catalog" data-garment-catalog', catalog_page)
         self.assertIn('id="home-panel"', catalog_page)
         self.assertIn("Toma o selecciona una foto", catalog_page)

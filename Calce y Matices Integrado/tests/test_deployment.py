@@ -19,6 +19,5 @@ class DeploymentTests(unittest.TestCase):
             self.assertEqual(response.status, 200)
             self.assertEqual(response.read(), b"ok")
 
-
 if __name__ == "__main__":
     unittest.main()

@@ -14,8 +14,10 @@ recomendaciones de calce y el catálogo de Calce.
    prendas que quieres explorar. Las recomendaciones se calculan con tus
    medidas y el calce elegido.
 3. Continúa al catálogo para buscar, filtrar por tipo, ordenar y comparar
-   prendas. Las tarjetas y la comparación muestran el calce estimado y las
-   medidas referenciales disponibles.
+   prendas. En la tercera pestaña, **Probador**, puedes iniciar pruebas
+   virtuales y consultar las operaciones guardadas en tu cuenta. Las tarjetas y
+   la comparación muestran el calce estimado y las medidas referenciales
+   disponibles.
 
 La paleta es una orientación visual; no filtra prendas por color, porque el
 catálogo no contiene datos de color verificados por producto. Las estimaciones
@@ -52,6 +54,36 @@ Para desplegar cambios, conecta el repositorio de GitHub en Render mediante
 `deploy/calce-matices-publica`. Configura `SUPABASE_PUBLISHABLE_KEY` como
 variable de entorno en Render; no publiques `.env` ni uses la clave
 `service_role`.
+
+## Integración con Aiuta Virtual Try-On
+
+La llamada a Aiuta se ejecuta en una Edge Function de Supabase, no en el
+servidor Python ni en el navegador. Requiere una sesión iniciada. Para
+habilitarla:
+
+1. En el panel SQL de Supabase, ejecuta `supabase/schema.sql` para crear la
+   tabla de operaciones, las políticas RLS y el bucket privado temporal.
+2. Suscríbete al producto Virtual Try-On en el
+   [portal de Aiuta](https://developer.aiuta.com/products/digital-try-on/documentation).
+   En Supabase, configura `AIUTA_API_KEY` como secreto de Edge Functions; no la
+   agregues a `.env`, Render ni al código del cliente.
+3. Despliega la función desde `Calce y Matices Integrado`:
+
+   ```bash
+   supabase functions deploy aiuta-try-on
+   ```
+
+Las operaciones y sus estados, SKU, errores y URLs de resultados se guardan en
+`aiuta_try_on_operations`, con acceso de lectura limitado mediante RLS a la
+cuenta propietaria. La foto se sube a un bucket privado temporal y la función la
+elimina después de enviarla a Aiuta. Solo se admiten fotos JPEG, PNG o WebP de
+hasta 10 MB. La retención de los resultados depende de la suscripción de Aiuta.
+
+Los SKU deben existir en el catálogo registrado en Aiuta. El botón
+**Probar virtualmente** de cada producto precarga el ID público de la tienda,
+que solo funcionará si coincide con un SKU de Aiuta; también puedes editar el
+SKU y el nombre del catálogo. Consulta el [flujo y referencia oficial de la
+API](https://docs.aiuta.com/api/try-on/).
 
 Para que funcionen las confirmaciones de correo, agrega
 `https://calce-matices-publica.onrender.com/**` a **Supabase → Authentication →

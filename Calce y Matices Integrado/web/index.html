@@ -7,7 +7,7 @@
   <meta name="supabase-url" content="{supabase_url}">
   <meta name="supabase-publishable-key" content="{supabase_publishable_key}">
   <title>Calce — recomendaciones por medidas</title>
-  <link rel="stylesheet" href="/styles.css?v=wizard-27">
+  <link rel="stylesheet" href="/styles.css?v=wizard-30">
 </head>
 <body>
   <header><div class="wrap nav">
@@ -19,6 +19,7 @@
         <a class="nav-auth-button nav-auth-button-primary" href="{sign_up_url}" data-open-account="sign-up"{sign_up_link_current}>Crear cuenta</a>
         <a id="home-link" href="{home_tab_url}"{home_link_current}>Inicio</a>
         <a id="catalog-link" href="{catalog_tab_url}"{catalog_link_current}>Catálogo</a>
+        <a id="try-on-link" href="{try_on_tab_url}"{try_on_link_current}>Probador</a>
       </nav>
       <details class="profile-menu" data-profile-menu hidden>
         <summary aria-label="Abrir menú de perfil">
@@ -235,7 +236,10 @@
     <section id="catalog-panel" data-page-panel="catalog"{catalog_panel_hidden}>
       {garment_catalog}
     </section>
+    <section id="try-on-panel" data-page-panel="try-on"{try_on_panel_hidden}>
+      {aiuta_try_on_panel}
+    </section>
   </div></main>
-  <script src="/app.js?v=wizard-32" defer></script>
+  <script src="/app.js?v=wizard-35-aiuta-photo" defer></script>
 </body>
 </html>

@@ -514,6 +514,8 @@ def _catalog_product_card(
         <span class="catalog-product-size">Talla publicada: {escape(product.talla or "No indicada")}</span>
         <strong class="catalog-price">{_format_price(product.precio_clp)}</strong>
         <span class="catalog-fit">{escape(fit_label)}</span>
+        <button class="catalog-try-on-button" type="button" data-aiuta-product
+          data-aiuta-sku-id="{escape(product.id, quote=True)}">Probar virtualmente</button>
         <a class="catalog-buy-link" href="{escape(product.url, quote=True)}"
           target="_blank" rel="noopener noreferrer">Ver ficha en {escape(store)}</a>
       </div>
@@ -588,6 +590,62 @@ def _garment_catalog(
         '<div data-catalog-comparison-items></div>'
         '<p class="catalog-total" data-catalog-total></p>'
         '</section></section>'
+    )
+
+
+def _aiuta_try_on_panel(query: Dict[str, str]) -> str:
+    sku_id = escape(query.get("sku_id", ""), quote=True)
+
+    def _product_option(product: ProductoVestua) -> str:
+        category = "superior" if re.search(
+            r"\b(?:blazer|camisa|chaqueta|sueter|polera|jacket|cardigan|top|sudadera|jersey|pullover|crop|remera|camiseta|abrigo|vestido|buzo|hoodie)\b",
+            " ".join((product.titulo, product.tipo_prenda, product.categorias_catalogo)).casefold(),
+        ) else "inferior"
+        image_url = escape(CATALOG_IMAGES_BY_URL.get(product.url, ""), quote=True)
+        selected = " selected" if product.id == sku_id else ""
+        return (
+            f'<option value="{escape(product.id, quote=True)}" data-image-url="{image_url}" '
+            f'data-category="{category}"{selected}>'
+            f'{escape(product.marca)} · {escape(product.titulo)} · {escape(product.talla or "No indicada")}</option>'
+        )
+
+    product_options = "".join(_product_option(product) for product in CATALOG_PRODUCTS[:60])
+    return (
+        '<div class="catalog-panel try-on-page-panel">'
+        '<section class="aiuta-try-on" data-aiuta-try-on '
+        'aria-labelledby="aiuta-try-on-title">'
+        '<header class="section-title aiuta-try-on-header">'
+        '<div>'
+        '<span class="eyebrow">Aiuta · Virtual Try-On</span>'
+        '<h1 id="aiuta-try-on-title">Probador virtual</h1>'
+        '</div>'
+        '<p class="sub">Prueba prendas del catálogo sin salir de la misma experiencia de Inicio y Catálogo.</p>'
+        '</header>'
+        '<div class="aiuta-source-photo" data-aiuta-source-photo hidden>'
+        '<img data-aiuta-source-preview alt="Foto seleccionada en Inicio">'
+        '<p data-aiuta-source-caption>Se usará la foto seleccionada en Inicio.</p></div>'
+        '<div class="aiuta-try-on-fields">'
+        '<label>Cambiar foto (opcional)'
+        '<input type="file" '
+        'data-aiuta-image></label>'
+        '<label>Prenda del catálogo'
+        f'<select data-aiuta-product-select hidden>'
+        '<option value="">Selecciona una prenda del catálogo</option>'
+        f'{product_options}</select></label>'
+        '<div class="aiuta-selection-list" data-aiuta-selection-list aria-live="polite"></div>'
+        '<div class="aiuta-picker-groups" data-aiuta-picker-groups></div>'
+        f'<input type="hidden" data-aiuta-sku value="{sku_id}" autocomplete="off">'
+        '<input type="hidden" data-aiuta-catalog value="main" autocomplete="off">'
+        '</div>'
+        '<div class="aiuta-try-on-actions">'
+        '<button type="button" class="aiuta-generate-button" data-aiuta-generate '
+        'aria-label="Probar la prenda seleccionada con Aiuta">Probar prenda</button>'
+        '</div>'
+        '<p class="aiuta-try-on-status" data-aiuta-status role="status" '
+        'aria-live="polite">Modo prueba sin sesión habilitado. Selecciona una foto y una prenda del catálogo.</p>'
+        '<div class="aiuta-try-on-results" data-aiuta-results></div>'
+        '</section>'
+        '</div>'
     )
 
 
@@ -1179,7 +1237,11 @@ def renderizar_pagina(query: Dict[str, str]) -> str:
         }
     )
     requested_view = query.get("view")
-    active_view = requested_view if requested_view in {"catalog", "account"} else "home"
+    active_view = (
+        requested_view
+        if requested_view in {"catalog", "account", "try-on"}
+        else "home"
+    )
     categorias_permitidas = (
         CATALOG.categorias()
         if not grupo_categoria and not categoria
@@ -1236,6 +1298,9 @@ def renderizar_pagina(query: Dict[str, str]) -> str:
     catalog_tab_query = dict(query)
     catalog_tab_query["view"] = "catalog"
     catalog_tab_url = f"/?{urlencode(catalog_tab_query)}"
+    try_on_tab_query = dict(query)
+    try_on_tab_query["view"] = "try-on"
+    try_on_tab_url = f"/?{urlencode(try_on_tab_query)}"
     auth_base_query = {"view": "account", "wizard_step": "2"}
     auth_base_query["auth_mode"] = "sign-in"
     sign_in_url = f"/?{urlencode(auth_base_query)}"
@@ -1244,6 +1309,7 @@ def renderizar_pagina(query: Dict[str, str]) -> str:
     garment_catalog = _garment_catalog(
         perfil, preferencia, visible=True, query=query
     )
+    aiuta_try_on_panel = _aiuta_try_on_panel(query)
     personal_recommendations = _personal_recommendations(
         perfil,
         preferencia,
@@ -1323,7 +1389,7 @@ def renderizar_pagina(query: Dict[str, str]) -> str:
         supabase_publishable_key=escape(SUPABASE_PUBLISHABLE_KEY, quote=True),
         startup_dialogs=(
             ""
-            if active_view == "catalog"
+            if active_view in {"catalog", "try-on"}
             else (
                 '<dialog class="welcome-dialog" data-startup-dialog '
                 'aria-labelledby="welcome-title">'
@@ -1347,14 +1413,17 @@ def renderizar_pagina(query: Dict[str, str]) -> str:
         alternative_recommendations=alternative_recommendations,
         store_recommendations=store_recommendations,
         garment_catalog=garment_catalog,
+        aiuta_try_on_panel=aiuta_try_on_panel,
         size_chart=size_chart,
         variables=variables,
         home_tab_url=escape(home_tab_url, quote=True),
         catalog_tab_url=escape(catalog_tab_url, quote=True),
+        try_on_tab_url=escape(try_on_tab_url, quote=True),
         sign_in_url=escape(sign_in_url, quote=True),
         sign_up_url=escape(sign_up_url, quote=True),
         home_link_current=' aria-current="page"' if active_view == "home" else "",
         catalog_link_current=' aria-current="page"' if active_view == "catalog" else "",
+        try_on_link_current=' aria-current="page"' if active_view == "try-on" else "",
         sign_in_link_current=(
             ' aria-current="page"'
             if active_view == "account" and query.get("auth_mode") != "sign-up"
@@ -1365,8 +1434,11 @@ def renderizar_pagina(query: Dict[str, str]) -> str:
             if active_view == "account" and query.get("auth_mode") == "sign-up"
             else ""
         ),
-        home_panel_hidden=' hidden' if active_view == "catalog" else "",
+        home_panel_hidden=(
+            ' hidden' if active_view in {"catalog", "try-on"} else ""
+        ),
         catalog_panel_hidden=' hidden' if active_view != "catalog" else "",
+        try_on_panel_hidden=' hidden' if active_view != "try-on" else "",
     )
 
 
@@ -1436,6 +1508,7 @@ class MedidasRequestHandler(BaseHTTPRequestHandler):
         content,
         content_type: str,
         cache_control: Optional[str] = None,
+        status: int = 200,
     ) -> None:
         if isinstance(content, str):
             content = content.encode("utf-8")
@@ -1465,7 +1538,7 @@ class MedidasRequestHandler(BaseHTTPRequestHandler):
             if len(compressed_content) < len(content):
                 content = compressed_content
                 compressed = True
-        self.send_response(200)
+        self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(content)))
         self.send_header("Vary", "Accept-Encoding")
@@ -1515,3 +1588,7 @@ def _abrir_navegador(url: str) -> None:
 
     if not webbrowser.open(url):
         raise webbrowser.Error("No se encontró un navegador disponible.")
+
+
+if __name__ == "__main__":
+    iniciar_servidor()

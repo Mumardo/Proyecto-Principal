@@ -113,4 +113,73 @@ create policy "Users can delete their own profile photos"
     and (storage.foldername(name))[1] = (select auth.uid())::text
   );
 
+create table if not exists public.aiuta_try_on_operations (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  aiuta_operation_id text unique,
+  sku_id text not null,
+  sku_catalog_name text not null default 'main',
+  status text not null default 'CREATING'
+    check (status in (
+      'CREATING', 'CREATED', 'IN_PROGRESS', 'PAUSED',
+      'SUCCESS', 'FAILED', 'CANCELLED', 'ABORTED'
+    )),
+  generated_images jsonb not null default '[]'::jsonb
+    check (jsonb_typeof(generated_images) = 'array'),
+  error text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists aiuta_try_on_operations_user_created_idx
+  on public.aiuta_try_on_operations (user_id, created_at desc);
+
+alter table public.aiuta_try_on_operations enable row level security;
+revoke all on public.aiuta_try_on_operations from anon, authenticated;
+grant select on public.aiuta_try_on_operations to authenticated;
+
+drop policy if exists "Users can read their own Aiuta operations"
+  on public.aiuta_try_on_operations;
+create policy "Users can read their own Aiuta operations"
+  on public.aiuta_try_on_operations for select to authenticated
+  using ((select auth.uid()) = user_id);
+
+insert into storage.buckets (
+  id,
+  name,
+  public,
+  file_size_limit,
+  allowed_mime_types
+)
+values (
+  'aiuta-try-on-uploads',
+  'aiuta-try-on-uploads',
+  false,
+  10485760,
+  array['image/jpeg', 'image/png', 'image/webp']
+)
+on conflict (id) do update
+set name = excluded.name,
+    public = excluded.public,
+    file_size_limit = excluded.file_size_limit,
+    allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Users can upload their own Aiuta try-on photos"
+  on storage.objects;
+create policy "Users can upload their own Aiuta try-on photos"
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'aiuta-try-on-uploads'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+
+drop policy if exists "Users can delete their own Aiuta try-on photos"
+  on storage.objects;
+create policy "Users can delete their own Aiuta try-on photos"
+  on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'aiuta-try-on-uploads'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+
 notify pgrst, 'reload schema';
