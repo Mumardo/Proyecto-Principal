@@ -2,6 +2,7 @@ import base64
 import json
 import threading
 import unittest
+from http.client import IncompleteRead
 from http.server import ThreadingHTTPServer
 from urllib.error import HTTPError
 from urllib.parse import quote
@@ -27,6 +28,11 @@ class _FakeResponse:
 
     def __exit__(self, *_):
         return False
+
+
+class _IncompleteReadResponse(_FakeResponse):
+    def read(self, limit=-1):
+        raise IncompleteRead(b"partial response", 1024)
 
 
 class DeploymentTests(unittest.TestCase):
@@ -135,6 +141,49 @@ class DeploymentTests(unittest.TestCase):
                 "authorization"
             ],
             "Bearer modal-secret",
+        )
+
+    def test_virtual_try_on_returns_json_when_modal_response_is_incomplete(self):
+        server = self.start_server()
+        product = CATALOG_PRODUCTS[0]
+        request = Request(
+            f"http://127.0.0.1:{server.server_port}/api/try-on",
+            data=json.dumps(
+                {
+                    "person_image_base64": base64.b64encode(b"person").decode("ascii"),
+                    "product_url": product.url,
+                }
+            ).encode("utf-8"),
+            headers={
+                "Authorization": "Bearer supabase-access-token",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+
+        with patch("web.servidor.SUPABASE_URL", "https://supabase.example"), \
+                patch("web.servidor.SUPABASE_PUBLISHABLE_KEY", "publishable-key"), \
+                patch("web.servidor.VTON_API_URL", "https://modal.example"), \
+                patch("web.servidor.VTON_API_TOKEN", "modal-secret"), \
+                patch(
+                    "web.servidor.urlopen",
+                    side_effect=[
+                        _FakeResponse(b'{"id":"user-123"}'),
+                        _FakeResponse(b"garment image"),
+                        _IncompleteReadResponse(b""),
+                    ],
+                ):
+            with self.assertRaises(HTTPError) as error:
+                urlopen(request)
+
+        self.assertEqual(error.exception.code, 502)
+        self.assertEqual(
+            error.exception.headers.get_content_type(),
+            "application/json",
+        )
+        self.assertEqual(
+            json.loads(error.exception.read())["error"],
+            "No se pudo conectar con Modal.",
         )
 
 

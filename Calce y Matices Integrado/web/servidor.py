@@ -1,6 +1,7 @@
 import base64
 import binascii
 from html import escape
+from http.client import IncompleteRead
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from mimetypes import guess_type
 from pathlib import Path
@@ -1581,7 +1582,18 @@ class MedidasRequestHandler(BaseHTTPRequestHandler):
             )
             self._send_json({"error": message}, status)
             return
-        except (URLError, TimeoutError, OSError, UnicodeDecodeError, json.JSONDecodeError):
+        except (
+            URLError,
+            TimeoutError,
+            OSError,
+            IncompleteRead,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+        ) as error:
+            self.log_error(
+                "Supabase session verification failed (%s)",
+                type(error).__name__,
+            )
             self._send_json(
                 {"error": "No se pudo verificar la sesión de Supabase."}, 502
             )
@@ -1705,7 +1717,11 @@ class MedidasRequestHandler(BaseHTTPRequestHandler):
                 502,
             )
             return
-        except (URLError, TimeoutError, OSError):
+        except (URLError, TimeoutError, OSError, IncompleteRead) as error:
+            self.log_error(
+                "Garment image download failed (%s)",
+                type(error).__name__,
+            )
             self._send_json(
                 {"error": "No se pudo descargar la imagen de la prenda."},
                 502,
@@ -1752,7 +1768,11 @@ class MedidasRequestHandler(BaseHTTPRequestHandler):
                 502,
             )
             return
-        except (URLError, TimeoutError, OSError):
+        except (URLError, TimeoutError, OSError, IncompleteRead) as error:
+            self.log_error(
+                "Modal try-on request failed (%s)",
+                type(error).__name__,
+            )
             self._send_json(
                 {"error": "No se pudo conectar con Modal."}, 502
             )
