@@ -1,3 +1,23 @@
+const readJsonResponse = async (response, endpoint) => {
+  const body = await response.text();
+  const contentType = response.headers.get("content-type") || "sin Content-Type";
+  if (!body.trim()) {
+    throw new Error(
+      `${endpoint}: respuesta vacía (HTTP ${response.status}, ${contentType}).`,
+    );
+  }
+  try {
+    return JSON.parse(body);
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new Error(
+        `${endpoint}: respuesta no JSON (HTTP ${response.status}, ${contentType}).`,
+      );
+    }
+    throw error;
+  }
+};
+
 document.querySelectorAll(".product-image").forEach(image => {
   image.addEventListener("error", () => {
     const link = image.closest(".product-image-link");
@@ -954,7 +974,7 @@ document.querySelectorAll("[data-garment-catalog]").forEach(catalog => {
       if (!response.ok) {
         throw new Error(`El servidor respondió HTTP ${response.status}.`);
       }
-      const data = await response.json();
+      const data = await readJsonResponse(response, "Catálogo");
       if (requestId !== requestNumber) return;
       const template = document.createElement("template");
       template.innerHTML = data.cards;
@@ -1106,7 +1126,7 @@ document.querySelectorAll("[data-garment-catalog]").forEach(catalog => {
       const response = await fetch(`/api/vton-products?${params}`, {
         signal: tryOnProductsController.signal,
       });
-      const data = await response.json();
+      const data = await readJsonResponse(response, "Búsqueda del Probador");
       if (!response.ok) {
         throw new Error(data.error || `El servidor respondió HTTP ${response.status}.`);
       }
@@ -1232,7 +1252,7 @@ document.querySelectorAll("[data-garment-catalog]").forEach(catalog => {
         }),
         signal: tryOnRequestController.signal,
       });
-      const data = await response.json();
+      const data = await readJsonResponse(response, "Probador");
       if (!response.ok) {
         throw new Error(data.error || `El servidor respondió HTTP ${response.status}.`);
       }
