@@ -7,7 +7,7 @@
   <meta name="supabase-url" content="{supabase_url}">
   <meta name="supabase-publishable-key" content="{supabase_publishable_key}">
   <title>Calce — recomendaciones por medidas</title>
-  <link rel="stylesheet" href="/styles.css?v=wizard-30">
+  <link rel="stylesheet" href="/styles.css?v=wizard-33">
 </head>
 <body>
   <header><div class="wrap nav">
@@ -19,7 +19,8 @@
         <a class="nav-auth-button nav-auth-button-primary" href="{sign_up_url}" data-open-account="sign-up"{sign_up_link_current}>Crear cuenta</a>
         <a id="home-link" href="{home_tab_url}"{home_link_current}>Inicio</a>
         <a id="catalog-link" href="{catalog_tab_url}"{catalog_link_current}>Catálogo</a>
-        <a id="try-on-link" href="{try_on_tab_url}"{try_on_link_current}>Probador</a>
+        <button id="try-on-link" class="nav-try-on-button" type="button"
+          data-open-try-on aria-controls="try-on-panel"{try_on_link_current}>Probador</button>
       </nav>
       <details class="profile-menu" data-profile-menu hidden>
         <summary aria-label="Abrir menú de perfil">
@@ -91,6 +92,7 @@
                 <span id="matices-remember-status" role="status" aria-live="polite"></span>
                 <small>Con una cuenta iniciada, la foto, las medidas y la paleta se vinculan a tu cuenta y se recuperan al volver a entrar. Sin sesión, se conservan en este dispositivo.</small>
               </div>
+              <p class="matices-photo-retention-note">Para continuar al Probador, la foto se guarda temporalmente en este navegador por hasta una hora. Al quitarla, también se elimina esta copia.</p>
               <p id="matices-status" class="matices-status" aria-live="polite">La foto se analiza al presionar Siguiente.</p>
             </div>
             <div class="wizard-actions wizard-actions-end">
@@ -237,9 +239,9 @@
       {garment_catalog}
     </section>
     <section id="try-on-panel" data-page-panel="try-on"{try_on_panel_hidden}>
-      {aiuta_try_on_panel}
+      {virtual_try_on_panel}
     </section>
   </div></main>
-  <script src="/app.js?v=wizard-35-aiuta-photo" defer></script>
+  <script src="/app.js?v=wizard-39" defer></script>
 </body>
 </html>

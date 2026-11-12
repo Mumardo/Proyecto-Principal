@@ -9,7 +9,9 @@ recomendaciones de calce y el catálogo de Calce.
    avanzar, la aplicación analiza sus tonos en el navegador y muestra una paleta
    recomendada con una explicación orientativa. Si activas **Recuérdame**, la
    foto se conserva en este navegador; con una sesión iniciada también se guarda
-   en el almacenamiento privado de tu cuenta.
+   en el almacenamiento privado de tu cuenta. Para usar el **Probador** tras ir
+   al catálogo, la foto también se conserva temporalmente en este navegador por
+   hasta una hora y se elimina al quitarla.
 2. Ingresa busto, cintura y cadera, y elige tu preferencia de calce y las
    prendas que quieres explorar. Las recomendaciones se calculan con tus
    medidas y el calce elegido.
@@ -38,13 +40,95 @@ de instalar las dependencias de Python. Para detener el servidor, presiona
 El acceso a la cámara requiere permiso del navegador y un contexto seguro:
 usa `localhost` en este equipo o sirve la aplicación mediante HTTPS.
 
+## API de probador virtual con Modal
+
+El botón **Probador**, junto a **Catálogo**, usa la foto seleccionada en **Inicio**
+y permite buscar una prenda del catálogo. La aplicación envía las imágenes a
+Modal a través de su backend; solo las cuentas con sesión iniciada pueden
+generar una prueba.
+
+El archivo [`vton_api.py`](./vton_api.py) prepara una API FastAPI en una GPU L4
+y monta el volumen persistente `vton-weights` en `/models`. El checkpoint
+`stabilityai/sdxl-turbo` incluido es solo un marcador para comprobar la descarga
+y caché; no es un modelo de prueba virtual. Hasta integrar la inferencia oficial
+de un modelo VTON en `load_model` y `generate`, la ruta devuelve la foto de la
+persona sin cambios y responde con `"status": "simulation"`.
+
+Para ejecutarlo, instala el cliente Modal fuera de las dependencias de la app,
+con Python 3.10 o posterior. Configura tu cuenta y crea un token de acceso:
+
+```bash
+python3.11 -m pip install --user --upgrade modal fastapi
+python3.11 -m modal setup
+python3.11 -m modal secret create vton-api-auth VTON_API_TOKEN=elige-un-token-largo
+```
+
+Después de desplegar la API, configura en el `.env` de esta app las variables
+`VTON_API_URL` (URL base permanente de Modal, sin `/try-on`) y
+`VTON_API_TOKEN` (el mismo valor configurado en el secreto de Modal). Configura
+esas mismas variables en el entorno de Render si usas la app publicada. El token
+se envía solo desde el servidor y no debe incluirse en el navegador.
+
+Desde esta carpeta, inicia el modo de desarrollo:
+
+```bash
+python3.11 -m modal serve vton_api.py
+```
+
+Modal mostrará una URL temporal que se actualiza al guardar cambios. Tras
+integrar y probar el modelo VTON real, detén `modal serve` con `Ctrl+C` y
+despliega la API:
+
+```bash
+python3.11 -m modal deploy vton_api.py
+```
+
+La URL permanente tendrá el formato
+`https://<usuario>--probador-virtual-api-fastapi-app.modal.run`; agrega
+`/try-on` al final para llamar al endpoint. La ruta exige el token guardado como
+secreto de Modal. No incluyas ese token en el JavaScript público del navegador:
+llama a esta API desde un backend propio. Cada llamada puede incurrir en costos
+de GPU.
+
+Ejemplo de cliente Python (requiere `requests`). Configura `VTON_API_TOKEN` en
+el entorno del backend y sustituye la URL por la que entregue Modal:
+
+```python
+import base64
+import os
+
+import requests
+
+def image_as_base64(path):
+    with open(path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode("utf-8")
+
+response = requests.post(
+    "https://<usuario>--probador-virtual-api-fastapi-app.modal.run/try-on",
+    headers={"Authorization": f"Bearer {os.environ['VTON_API_TOKEN']}"},
+    json={
+        "person_image_base64": image_as_base64("persona.jpg"),
+        "garment_image_base64": image_as_base64("prenda.jpg"),
+        "category": "upper_body",
+    },
+    timeout=300,
+)
+response.raise_for_status()
+result = response.json()
+with open("resultado.jpg", "wb") as image_file:
+    image_file.write(base64.b64decode(result["result_image_base64"]))
+```
+
 ## Publicar gratis en Render
 
 El archivo [`../render.yaml`](../render.yaml) configura un servicio web
 gratuito con un subdominio HTTPS de `onrender.com`. Sube este repositorio a
 GitHub y, en Render, selecciona **New → Blueprint** y conecta el repositorio.
-Render leerá la configuración y solicitará `SUPABASE_PUBLISHABLE_KEY` como
-variable de entorno; usa la clave publishable/anon, nunca `service_role`.
+Render leerá la configuración y solicitará `SUPABASE_PUBLISHABLE_KEY`,
+`VTON_API_URL` y `VTON_API_TOKEN` como variables de entorno. Usa la URL base
+permanente de Modal, sin `/try-on`, y el mismo token del secreto de Modal
+`vton-api-auth`. No guardes el token en el repositorio; para Supabase usa la
+clave publishable/anon, nunca `service_role`.
 
 La página será pública, pero las medidas, paletas y fotos de las cuentas siguen
 protegidas por la autenticación y RLS de Supabase. Después del primer despliegue,

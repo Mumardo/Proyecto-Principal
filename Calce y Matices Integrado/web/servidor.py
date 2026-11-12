@@ -1,3 +1,5 @@
+import base64
+import binascii
 from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from mimetypes import guess_type
@@ -15,6 +17,8 @@ import sys
 from typing import Dict, MutableMapping, Optional, Tuple
 import unicodedata
 from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 import webbrowser
 
 from medidas.perfil_medidas import PerfilMedidas
@@ -72,6 +76,10 @@ SUPABASE_URL = os.environ.get(
     "SUPABASE_URL", "https://twhszjxhmimqlzthlbgy.supabase.co"
 ).rstrip("/")
 SUPABASE_PUBLISHABLE_KEY = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "")
+VTON_API_URL = os.environ.get("VTON_API_URL", "").strip().rstrip("/")
+VTON_API_TOKEN = os.environ.get("VTON_API_TOKEN", "")
+MAX_VTON_IMAGE_BYTES = 10 * 1024 * 1024
+MAX_VTON_REQUEST_BYTES = 14 * 1024 * 1024 + 64 * 1024
 REPOSITORY = RepositorioExcelPrendas(MATRIX_PATH)
 VARIABLES = REPOSITORY.cargar_variables()
 STANDARD_SIZES = RepositorioTallasEstandar(SIZE_CHART_PATH).cargar()
@@ -158,6 +166,7 @@ CATALOG_PRODUCTS = tuple(
         and urlparse(image_url).netloc
     )
 )
+CATALOG_PRODUCTS_BY_URL = {product.url: product for product in CATALOG_PRODUCTS}
 CATALOG_SEARCH_TEXT_BY_URL = {
     product.url: _normalize_search_text(
         " ".join(
@@ -182,6 +191,21 @@ CATALOG_SORT_OPTIONS = (
     ("price-asc", "Precio: menor a mayor"),
     ("price-desc", "Precio: mayor a menor"),
 )
+
+
+def _virtual_try_on_category(product: ProductoVestua) -> str:
+    details = _normalize_search_text(
+        " ".join((product.titulo, product.tipo_prenda, product.categorias_catalogo))
+    )
+    if re.search(r"\bvestid\w*\b", details):
+        return "dresses"
+    if re.search(
+        r"\b(?:blazer|blusa|camisa|chaqueta|polera|top|cardigan|sueter|"
+        r"poleron|abrigo|veston|hoodie|sudadera|camiseta|remera)\w*\b",
+        details,
+    ):
+        return "upper_body"
+    return "lower_body"
 
 
 def _has_vestua_listing(prenda) -> bool:
@@ -514,8 +538,6 @@ def _catalog_product_card(
         <span class="catalog-product-size">Talla publicada: {escape(product.talla or "No indicada")}</span>
         <strong class="catalog-price">{_format_price(product.precio_clp)}</strong>
         <span class="catalog-fit">{escape(fit_label)}</span>
-        <button class="catalog-try-on-button" type="button" data-aiuta-product
-          data-aiuta-sku-id="{escape(product.id, quote=True)}">Probar virtualmente</button>
         <a class="catalog-buy-link" href="{escape(product.url, quote=True)}"
           target="_blank" rel="noopener noreferrer">Ver ficha en {escape(store)}</a>
       </div>
@@ -593,59 +615,47 @@ def _garment_catalog(
     )
 
 
-def _aiuta_try_on_panel(query: Dict[str, str]) -> str:
-    sku_id = escape(query.get("sku_id", ""), quote=True)
-
-    def _product_option(product: ProductoVestua) -> str:
-        category = "superior" if re.search(
-            r"\b(?:blazer|camisa|chaqueta|sueter|polera|jacket|cardigan|top|sudadera|jersey|pullover|crop|remera|camiseta|abrigo|vestido|buzo|hoodie)\b",
-            " ".join((product.titulo, product.tipo_prenda, product.categorias_catalogo)).casefold(),
-        ) else "inferior"
-        image_url = escape(CATALOG_IMAGES_BY_URL.get(product.url, ""), quote=True)
-        selected = " selected" if product.id == sku_id else ""
-        return (
-            f'<option value="{escape(product.id, quote=True)}" data-image-url="{image_url}" '
-            f'data-category="{category}"{selected}>'
-            f'{escape(product.marca)} · {escape(product.titulo)} · {escape(product.talla or "No indicada")}</option>'
-        )
-
-    product_options = "".join(_product_option(product) for product in CATALOG_PRODUCTS[:60])
+def _virtual_try_on_panel() -> str:
     return (
-        '<div class="catalog-panel try-on-page-panel">'
-        '<section class="aiuta-try-on" data-aiuta-try-on '
-        'aria-labelledby="aiuta-try-on-title">'
-        '<header class="section-title aiuta-try-on-header">'
-        '<div>'
-        '<span class="eyebrow">Aiuta · Virtual Try-On</span>'
-        '<h1 id="aiuta-try-on-title">Probador virtual</h1>'
-        '</div>'
-        '<p class="sub">Prueba prendas del catálogo sin salir de la misma experiencia de Inicio y Catálogo.</p>'
+        '<section class="try-on-panel" data-virtual-try-on '
+        'aria-labelledby="virtual-try-on-title">'
+        '<header class="try-on-heading">'
+        '<div><span class="eyebrow">Prueba con tu foto</span>'
+        '<h1 id="virtual-try-on-title">Probador</h1></div>'
+        '<p class="sub">Usaremos la foto seleccionada en Inicio y una prenda del catálogo. '
+        'La foto se conserva temporalmente en este navegador durante una hora.</p>'
         '</header>'
-        '<div class="aiuta-source-photo" data-aiuta-source-photo hidden>'
-        '<img data-aiuta-source-preview alt="Foto seleccionada en Inicio">'
-        '<p data-aiuta-source-caption>Se usará la foto seleccionada en Inicio.</p></div>'
-        '<div class="aiuta-try-on-fields">'
-        '<label>Cambiar foto (opcional)'
-        '<input type="file" '
-        'data-aiuta-image></label>'
-        '<label>Prenda del catálogo'
-        f'<select data-aiuta-product-select hidden>'
-        '<option value="">Selecciona una prenda del catálogo</option>'
-        f'{product_options}</select></label>'
-        '<div class="aiuta-selection-list" data-aiuta-selection-list aria-live="polite"></div>'
-        '<div class="aiuta-picker-groups" data-aiuta-picker-groups></div>'
-        f'<input type="hidden" data-aiuta-sku value="{sku_id}" autocomplete="off">'
-        '<input type="hidden" data-aiuta-catalog value="main" autocomplete="off">'
+        '<div class="try-on-layout">'
+        '<div class="try-on-person">'
+        '<h2>Foto de Inicio</h2>'
+        '<img data-vton-person-preview alt="Foto seleccionada en Inicio" hidden>'
+        '<p data-vton-person-empty>No hay una foto seleccionada en esta sesión. '
+        '<a href="/" data-vton-return-home>Ve a Inicio y selecciona una foto.</a></p>'
         '</div>'
-        '<div class="aiuta-try-on-actions">'
-        '<button type="button" class="aiuta-generate-button" data-aiuta-generate '
-        'aria-label="Probar la prenda seleccionada con Aiuta">Probar prenda</button>'
+        '<div class="try-on-controls">'
+        '<label for="vton-product-search">Buscar una prenda del catálogo'
+        '<input id="vton-product-search" type="search" data-vton-product-search '
+        'placeholder="Nombre, marca o tienda" autocomplete="off"></label>'
+        '<label for="vton-product-select">Prenda'
+        '<select id="vton-product-select" data-vton-product-select size="7">'
+        '<option value="">Escribe para buscar productos</option>'
+        '</select></label>'
+        '<div class="try-on-garment-preview">'
+        '<img data-vton-garment-preview alt="Imagen de la prenda seleccionada" hidden>'
+        '<p data-vton-garment-empty>Selecciona una prenda para ver su imagen.</p>'
         '</div>'
-        '<p class="aiuta-try-on-status" data-aiuta-status role="status" '
-        'aria-live="polite">Modo prueba sin sesión habilitado. Selecciona una foto y una prenda del catálogo.</p>'
-        '<div class="aiuta-try-on-results" data-aiuta-results></div>'
+        '<button class="matices-button matices-button-primary" type="button" '
+        'data-vton-generate disabled>Probar prenda</button>'
+        '</div></div>'
+        '<p class="try-on-status" data-vton-status role="status" aria-live="polite">'
+        'Selecciona una prenda. Se requiere iniciar sesión para generar la prueba.</p>'
+        '<p class="try-on-auth-note">¿No tienes sesión? '
+        '<a href="/?view=account&amp;wizard_step=2">Inicia sesión o crea una cuenta.</a></p>'
+        '<figure class="try-on-result" data-vton-result hidden>'
+        '<figcaption data-vton-result-status></figcaption>'
+        '<img data-vton-result-image alt="Resultado de la prueba virtual">'
+        '</figure>'
         '</section>'
-        '</div>'
     )
 
 
@@ -737,6 +747,44 @@ def _catalog_page_data(
         "result_text": result_text,
         "page_text": f"Página {page + 1} de {page_count}" if page_count else "Sin páginas",
     }
+
+
+def _virtual_try_on_products(search: str) -> Dict[str, object]:
+    normalized_search = _normalize_search_text(search.strip())
+    products = []
+    for product in CATALOG_PRODUCTS:
+        if (
+            normalized_search
+            and normalized_search not in CATALOG_SEARCH_TEXT_BY_URL[product.url]
+        ):
+            continue
+        image_url = CATALOG_IMAGES_BY_URL.get(product.url, "")
+        products.append(
+            {
+                "product_url": product.url,
+                "title": product.titulo,
+                "brand": product.marca,
+                "store": CATALOG_STORES_BY_URL.get(product.url, "Vestua"),
+                "size": product.talla or "No indicada",
+                "image_url": image_url,
+                "category": _virtual_try_on_category(product),
+            }
+        )
+        if len(products) == 24:
+            break
+    return {"products": products}
+
+
+def _supabase_user_for_token(access_token: str) -> object:
+    request = Request(
+        f"{SUPABASE_URL}/auth/v1/user",
+        headers={
+            "apikey": SUPABASE_PUBLISHABLE_KEY,
+            "Authorization": f"Bearer {access_token}",
+        },
+    )
+    with urlopen(request, timeout=10) as response:
+        return json.loads(response.read(65536).decode("utf-8"))
 
 
 @lru_cache(maxsize=8)
@@ -1309,7 +1357,7 @@ def renderizar_pagina(query: Dict[str, str]) -> str:
     garment_catalog = _garment_catalog(
         perfil, preferencia, visible=True, query=query
     )
-    aiuta_try_on_panel = _aiuta_try_on_panel(query)
+    virtual_try_on_panel = _virtual_try_on_panel()
     personal_recommendations = _personal_recommendations(
         perfil,
         preferencia,
@@ -1413,7 +1461,7 @@ def renderizar_pagina(query: Dict[str, str]) -> str:
         alternative_recommendations=alternative_recommendations,
         store_recommendations=store_recommendations,
         garment_catalog=garment_catalog,
-        aiuta_try_on_panel=aiuta_try_on_panel,
+        virtual_try_on_panel=virtual_try_on_panel,
         size_chart=size_chart,
         variables=variables,
         home_tab_url=escape(home_tab_url, quote=True),
@@ -1447,6 +1495,15 @@ class MedidasRequestHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/healthz":
             self._send_content("ok", "text/plain; charset=utf-8")
+            return
+        if parsed.path == "/api/vton-products":
+            query = {
+                key: values[-1]
+                for key, values in parse_qs(
+                    parsed.query, keep_blank_values=True
+                ).items()
+            }
+            self._send_json(_virtual_try_on_products(query.get("search", "")))
             return
         if parsed.path == "/api/catalog":
             query = {
@@ -1488,6 +1545,248 @@ class MedidasRequestHandler(BaseHTTPRequestHandler):
             return
         self.send_error(404, "Página no encontrada")
 
+    def do_POST(self) -> None:
+        if urlparse(self.path).path != "/api/try-on":
+            self.send_error(404, "Página no encontrada")
+            return
+        self._post_virtual_try_on()
+
+    def _post_virtual_try_on(self) -> None:
+        authorization = self.headers.get("Authorization", "")
+        scheme, separator, access_token = authorization.partition(" ")
+        if (
+            scheme.casefold() != "bearer"
+            or not separator
+            or not access_token
+            or len(access_token) > 8192
+        ):
+            self._send_json(
+                {"error": "Inicia sesión para usar el Probador."}, 401
+            )
+            return
+        if not SUPABASE_URL or not SUPABASE_PUBLISHABLE_KEY:
+            self._send_json(
+                {"error": "La verificación de sesión no está configurada."},
+                503,
+            )
+            return
+        try:
+            user = _supabase_user_for_token(access_token)
+        except HTTPError as error:
+            status = 401 if error.code in {401, 403} else 502
+            message = (
+                "Tu sesión de Supabase no es válida."
+                if status == 401
+                else "No se pudo verificar la sesión de Supabase."
+            )
+            self._send_json({"error": message}, status)
+            return
+        except (URLError, TimeoutError, OSError, UnicodeDecodeError, json.JSONDecodeError):
+            self._send_json(
+                {"error": "No se pudo verificar la sesión de Supabase."}, 502
+            )
+            return
+        if not isinstance(user, dict) or not isinstance(user.get("id"), str):
+            self._send_json(
+                {"error": "Tu sesión de Supabase no es válida."}, 401
+            )
+            return
+
+        try:
+            content_length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            self._send_json(
+                {"error": "La solicitud no tiene un tamaño válido."}, 400
+            )
+            return
+        if content_length <= 0:
+            self._send_json({"error": "La solicitud está vacía."}, 400)
+            return
+        if content_length > MAX_VTON_REQUEST_BYTES:
+            self._send_json(
+                {"error": "La foto supera el límite de 10 MB."}, 413
+            )
+            return
+
+        try:
+            payload = json.loads(
+                self.rfile.read(content_length).decode("utf-8")
+            )
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            self._send_json(
+                {"error": "El cuerpo de la solicitud no es JSON válido."}, 400
+            )
+            return
+        if not isinstance(payload, dict):
+            self._send_json(
+                {"error": "La solicitud no tiene el formato esperado."}, 400
+            )
+            return
+
+        person_image_base64 = payload.get("person_image_base64")
+        product_url = payload.get("product_url")
+        if not isinstance(person_image_base64, str) or not isinstance(product_url, str):
+            self._send_json(
+                {
+                    "error": (
+                        "Se requieren la foto de Inicio y una prenda del catálogo."
+                    )
+                },
+                400,
+            )
+            return
+        try:
+            person_image = base64.b64decode(
+                person_image_base64, validate=True
+            )
+        except (binascii.Error, ValueError):
+            self._send_json(
+                {"error": "La foto de Inicio no contiene Base64 válido."}, 400
+            )
+            return
+        if not person_image:
+            self._send_json(
+                {"error": "Selecciona una foto en Inicio."}, 400
+            )
+            return
+        if len(person_image) > MAX_VTON_IMAGE_BYTES:
+            self._send_json(
+                {"error": "La foto supera el límite de 10 MB."}, 413
+            )
+            return
+
+        product = CATALOG_PRODUCTS_BY_URL.get(product_url)
+        if product is None:
+            self._send_json(
+                {"error": "La prenda seleccionada no está en el catálogo."},
+                404,
+            )
+            return
+        if not VTON_API_URL or not VTON_API_TOKEN:
+            self._send_json(
+                {
+                    "error": (
+                        "Configura VTON_API_URL y VTON_API_TOKEN en el servidor."
+                    )
+                },
+                503,
+            )
+            return
+        api_url = urlparse(VTON_API_URL)
+        if (
+            api_url.scheme != "https"
+            or not api_url.netloc
+            or api_url.username
+            or api_url.password
+        ):
+            self._send_json(
+                {"error": "VTON_API_URL debe ser una URL HTTPS válida."}, 503
+            )
+            return
+
+        image_url = CATALOG_IMAGES_BY_URL[product.url]
+        try:
+            image_request = Request(
+                image_url,
+                headers={"User-Agent": "CalceMatices/1.0"},
+            )
+            with urlopen(image_request, timeout=20) as image_response:
+                garment_image = image_response.read(
+                    MAX_VTON_IMAGE_BYTES + 1
+                )
+        except HTTPError as error:
+            self._send_json(
+                {
+                    "error": (
+                        "No se pudo descargar la imagen de la prenda "
+                        f"(HTTP {error.code})."
+                    )
+                },
+                502,
+            )
+            return
+        except (URLError, TimeoutError, OSError):
+            self._send_json(
+                {"error": "No se pudo descargar la imagen de la prenda."},
+                502,
+            )
+            return
+        if not garment_image or len(garment_image) > MAX_VTON_IMAGE_BYTES:
+            self._send_json(
+                {
+                    "error": (
+                        "La imagen de la prenda está vacía o supera los 10 MB."
+                    )
+                },
+                502,
+            )
+            return
+
+        modal_request = Request(
+            f"{VTON_API_URL}/try-on",
+            data=json.dumps(
+                {
+                    "person_image_base64": base64.b64encode(
+                        person_image
+                    ).decode("ascii"),
+                    "garment_image_base64": base64.b64encode(
+                        garment_image
+                    ).decode("ascii"),
+                    "category": _virtual_try_on_category(product),
+                }
+            ).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {VTON_API_TOKEN}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urlopen(modal_request, timeout=300) as modal_response:
+                modal_result = modal_response.read(
+                    MAX_VTON_REQUEST_BYTES + 1
+                )
+        except HTTPError as error:
+            self._send_json(
+                {"error": f"Modal rechazó la solicitud (HTTP {error.code})."},
+                502,
+            )
+            return
+        except (URLError, TimeoutError, OSError):
+            self._send_json(
+                {"error": "No se pudo conectar con Modal."}, 502
+            )
+            return
+        if len(modal_result) > MAX_VTON_REQUEST_BYTES:
+            self._send_json(
+                {"error": "Modal devolvió una respuesta demasiado grande."},
+                502,
+            )
+            return
+        try:
+            result = json.loads(modal_result.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            self._send_json(
+                {"error": "Modal devolvió una respuesta inválida."}, 502
+            )
+            return
+
+        if (
+            not isinstance(result, dict)
+            or not isinstance(result.get("result_image_base64"), str)
+        ):
+            self._send_json(
+                {"error": "Modal no devolvió una imagen válida."}, 502
+            )
+            return
+        self._send_json(
+            {
+                "status": result.get("status", "success"),
+                "detail": result.get("detail", ""),
+                "result_image_base64": result["result_image_base64"],
+            }
+        )
+
     def _send_static_file(self, path: Path, content_type: str) -> None:
         try:
             content = path.read_bytes()
@@ -1501,6 +1800,13 @@ class MedidasRequestHandler(BaseHTTPRequestHandler):
             content,
             content_type,
             cache_control="public, max-age=3600",
+        )
+
+    def _send_json(self, payload: Dict[str, object], status: int = 200) -> None:
+        self._send_content(
+            json.dumps(payload, ensure_ascii=False),
+            "application/json; charset=utf-8",
+            status=status,
         )
 
     def _send_content(

@@ -52,8 +52,12 @@ en reactivarse.
 Para desplegar cambios, conecta el repositorio de GitHub en Render mediante
 **New → Blueprint** y sincroniza el Blueprint con la rama
 `deploy/calce-matices-publica`. Configura `SUPABASE_PUBLISHABLE_KEY` como
-variable de entorno en Render; no publiques `.env` ni uses la clave
-`service_role`.
+variable de entorno en Render. Para habilitar el probador, configura también
+`VTON_API_URL` con la URL base permanente de Modal (sin `/try-on`) y
+`VTON_API_TOKEN` con el mismo token guardado en el secreto de Modal
+`vton-api-auth`. Render solicitará estas variables al sincronizar el Blueprint;
+el token no debe publicarse ni guardarse en el repositorio. No publiques `.env`
+ni uses la clave `service_role`.
 
 ## Integración con Aiuta Virtual Try-On
 
@@ -137,6 +141,65 @@ Sin sesión, las medidas y las fotos recordadas permanecen solo en el navegador.
 La publishable key se envía al navegador y no es una clave secreta; la seguridad
 depende de RLS y de no exponer nunca una clave `service_role`. La autenticación
 usa Supabase JS desde jsDelivr, por lo que requiere conexión a internet.
+
+## API opcional con Modal (pasos 3–5)
+
+El proyecto incluye [`vton_api.py`](./Calce%20y%20Matices%20Integrado/vton_api.py),
+que monta una API FastAPI en una GPU L4 y guarda la caché del modelo en el
+volumen persistente `vton-weights`. El botón **Probador**, junto a **Catálogo**,
+usa la foto elegida en **Inicio** y permite seleccionar una prenda del catálogo.
+Solo las cuentas con sesión iniciada pueden enviar solicitudes.
+
+**Estado actual:** SDXL-Turbo es solo un checkpoint de referencia, no un modelo
+VTON. Hasta integrar la inferencia oficial de un modelo de prueba virtual, el
+endpoint devuelve la foto original con estado `simulation`; no fusiona la
+prenda.
+
+### Paso 3: preparar y configurar la API
+
+Desde la carpeta del proyecto, instala y configura Modal. El token se guarda
+como secreto de Modal y protege el endpoint:
+
+```bash
+cd "Calce y Matices Integrado"
+python3.11 -m pip install --user --upgrade modal fastapi
+python3.11 -m modal setup
+python3.11 -m modal secret create vton-api-auth VTON_API_TOKEN=elige-un-token-largo
+```
+
+Después del despliegue, configura `VTON_API_URL` con la URL base permanente de
+Modal (sin `/try-on`) y `VTON_API_TOKEN` con el mismo valor del secreto de Modal
+en el `.env` de la app y en las variables de entorno de Render. La clave queda
+en el backend; no la publiques en el navegador.
+
+### Paso 4: probar y desplegar
+
+Para obtener una URL temporal que se actualiza al guardar cambios:
+
+```bash
+cd "Calce y Matices Integrado"
+python3.11 -m modal serve vton_api.py
+```
+
+Cuando la inferencia VTON real esté integrada y probada, detén el modo de
+desarrollo con `Ctrl+C` y publica la API:
+
+```bash
+cd "Calce y Matices Integrado"
+python3.11 -m modal deploy vton_api.py
+```
+
+Modal entrega una URL permanente con formato
+`https://<usuario>--probador-virtual-api-fastapi-app.modal.run`. La ruta de
+inferencia es `/try-on`.
+
+### Paso 5: llamar a la API desde el backend
+
+Envía las imágenes de persona y prenda en Base64 junto con la categoría y el
+token Bearer. No incluyas el token en el JavaScript público del navegador; llama
+a Modal desde un backend propio. El ejemplo Python completo está en la
+[guía de Modal del subproyecto](./Calce%20y%20Matices%20Integrado/README.md#api-alternativa-de-probador-virtual-con-modal).
+Las llamadas a la GPU pueden generar costos.
 
 Al iniciar, la aplicación intenta abrir la URL en Google Chrome. En VS Code,
 selecciona **Medidas: ejecutar en Chrome** en el panel **Ejecutar y depurar** y
