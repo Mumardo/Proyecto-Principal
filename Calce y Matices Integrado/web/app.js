@@ -1229,10 +1229,10 @@ document.querySelectorAll("[data-garment-catalog]").forEach(catalog => {
 
     tryOnRequestController?.abort();
     tryOnRequestController = new AbortController();
-    const timeout = window.setTimeout(() => tryOnRequestController.abort(), 60000);
+    const timeout = window.setTimeout(() => tryOnRequestController.abort(), 600000);
     tryOnGenerateButton.disabled = true;
     tryOnResult.hidden = true;
-    tryOnStatus.textContent = "Preparando la simulación; puede tardar unos segundos.";
+    tryOnStatus.textContent = "Generando la prueba virtual; la primera prueba puede tardar varios minutos.";
     try {
       const accessToken = await window.calceGetAccessToken?.();
       if (!accessToken) {

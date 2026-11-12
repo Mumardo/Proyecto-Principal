@@ -1758,7 +1758,7 @@ class MedidasRequestHandler(BaseHTTPRequestHandler):
             method="POST",
         )
         try:
-            with urlopen(modal_request, timeout=60) as modal_response:
+            with urlopen(modal_request, timeout=600) as modal_response:
                 modal_result = modal_response.read(
                     MAX_VTON_REQUEST_BYTES + 1
                 )

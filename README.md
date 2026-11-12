@@ -145,14 +145,15 @@ usa Supabase JS desde jsDelivr, por lo que requiere conexión a internet.
 ## API opcional con Modal (pasos 3–5)
 
 El proyecto incluye [`vton_api.py`](./Calce%20y%20Matices%20Integrado/vton_api.py),
-una API FastAPI ligera que no carga GPU ni modelos. El botón **Probador**, junto
-a **Catálogo**, usa la foto elegida en **Inicio** y permite seleccionar una
-prenda del catálogo. Solo las cuentas con sesión iniciada pueden enviar
-solicitudes.
+una API FastAPI ligera que delega el procesamiento a FASHN VTON 1.5 en Modal
+L4. El botón **Probador**, junto a **Catálogo**, usa la foto elegida en **Inicio**
+y permite seleccionar una prenda del catálogo. Solo las cuentas con sesión
+iniciada pueden enviar solicitudes.
 
-**Estado actual:** el endpoint valida las imágenes y devuelve la foto original
-con estado `simulation`; todavía no fusiona la prenda. Integrar un modelo VTON
-real requerirá una implementación y recursos de cómputo adicionales.
+La inferencia real usa los pesos de FASHN y DWPose junto con un parser humano.
+**Importante:** la licencia NVIDIA del parser limita el uso a investigación y
+evaluación no comercial. Esta integración es solo para uso personal/no comercial;
+no la uses comercialmente sin un parser con licencia compatible.
 
 ### Paso 3: preparar y configurar la API
 
@@ -171,35 +172,37 @@ Modal (sin `/try-on`) y `VTON_API_TOKEN` con el mismo valor del secreto de Modal
 en el `.env` de la app y en las variables de entorno de Render. La clave queda
 en el backend; no la publiques en el navegador.
 
-### Paso 4: probar y desplegar
+### Paso 4: descargar pesos, probar y desplegar
+
+Descarga una vez los pesos al volumen persistente de Modal y despliega:
+
+```bash
+cd "Calce y Matices Integrado"
+python3.11 -m modal run vton_api.py::prepare_weights
+python3.11 -m modal deploy vton_api.py
+```
 
 Para obtener una URL temporal que se actualiza al guardar cambios:
 
 ```bash
-cd "Calce y Matices Integrado"
 python3.11 -m modal serve vton_api.py
-```
-
-Cuando la inferencia VTON real esté integrada y probada, detén el modo de
-desarrollo con `Ctrl+C` y publica la API:
-
-```bash
-cd "Calce y Matices Integrado"
-python3.11 -m modal deploy vton_api.py
 ```
 
 Modal entrega una URL permanente con formato
 `https://<usuario>--probador-virtual-api-fastapi-app.modal.run`. La ruta de
-inferencia es `/try-on`.
+inferencia es `/try-on`. La preparación descarga aproximadamente 2 GB de pesos
+VTON, los pesos DWPose y unos 244 MB del parser; conserva los archivos
+SDXL-Turbo existentes. La GPU L4 se escala a cero tras 60 segundos sin
+solicitudes, con tarifa publicada de aprox. US$0.000222/s de GPU, más CPU,
+memoria y almacenamiento. La primera solicitud tras escalar a cero puede tardar
+varios minutos mientras el worker carga el modelo.
 
 ### Paso 5: llamar a la API desde el backend
 
 Envía las imágenes de persona y prenda en Base64 junto con la categoría y el
 token Bearer. No incluyas el token en el JavaScript público del navegador; llama
 a Modal desde un backend propio. El ejemplo Python completo está en la
-[guía de Modal del subproyecto](./Calce%20y%20Matices%20Integrado/README.md#api-alternativa-de-probador-virtual-con-modal).
-La simulación actual no solicita una GPU, aunque Modal puede cobrar por ejecutar
-el endpoint.
+[guía de Modal del subproyecto](./Calce%20y%20Matices%20Integrado/README.md#api-de-probador-virtual-con-modal).
 
 Al iniciar, la aplicación intenta abrir la URL en Google Chrome. En VS Code,
 selecciona **Medidas: ejecutar en Chrome** en el panel **Ejecutar y depurar** y

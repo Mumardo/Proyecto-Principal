@@ -89,8 +89,8 @@ class DeploymentTests(unittest.TestCase):
         result_image = base64.b64encode(b"result image").decode("ascii")
         modal_result = json.dumps(
             {
-                "status": "simulation",
-                "detail": "Inferencia pendiente",
+                "status": "success",
+                "detail": "Imagen generada con FASHN VTON 1.5.",
                 "result_image_base64": result_image,
             }
         ).encode("utf-8")
@@ -124,7 +124,7 @@ class DeploymentTests(unittest.TestCase):
             with urlopen(request) as response:
                 data = json.loads(response.read())
 
-        self.assertEqual(data["status"], "simulation")
+        self.assertEqual(data["status"], "success")
         self.assertEqual(data["result_image_base64"], result_image)
         self.assertEqual(modal_requests.call_count, 3)
         modal_request = modal_requests.call_args_list[2][0][0]

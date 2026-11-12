@@ -47,10 +47,17 @@ y permite buscar una prenda del catálogo. La aplicación envía las imágenes a
 Modal a través de su backend; solo las cuentas con sesión iniciada pueden
 generar una prueba.
 
-El archivo [`vton_api.py`](./vton_api.py) prepara una API FastAPI ligera, sin GPU
-ni carga de modelos. El Probador actual es una simulación: valida las imágenes y
-devuelve la foto de la persona sin cambios con `"status": "simulation"`. Para
-generar una imagen con la prenda hace falta integrar un modelo VTON real.
+El archivo [`vton_api.py`](./vton_api.py) sirve una API FastAPI ligera y delega
+la inferencia a FASHN VTON 1.5 en una GPU Modal L4. El modelo genera una imagen
+de la persona con la prenda seleccionada usando 20 pasos de inferencia. Los pesos
+de FASHN y DWPose, junto con la caché del parser, se guardan en el volumen
+persistente `vton-weights`; la caché SDXL-Turbo que ya existía no se elimina.
+
+**Licencia:** aunque FASHN VTON 1.5 publica sus pesos bajo Apache-2.0, el parser
+humano requerido usa la licencia NVIDIA de SegFormer, limitada a investigación
+y evaluación no comercial. Esta integración es solo para uso personal/no
+comercial; no la uses en un servicio comercial sin reemplazar el parser por uno
+con licencia adecuada.
 
 Para ejecutarlo, instala el cliente Modal fuera de las dependencias de la app,
 con Python 3.10 o posterior. Configura tu cuenta y crea un token de acceso:
@@ -61,32 +68,37 @@ python3.11 -m modal setup
 python3.11 -m modal secret create vton-api-auth VTON_API_TOKEN=elige-un-token-largo
 ```
 
-Después de desplegar la API, configura en el `.env` de esta app las variables
-`VTON_API_URL` (URL base permanente de Modal, sin `/try-on`) y
-`VTON_API_TOKEN` (el mismo valor configurado en el secreto de Modal). Configura
-esas mismas variables en el entorno de Render si usas la app publicada. El token
-se envía solo desde el servidor y no debe incluirse en el navegador.
+Descarga y prepara los pesos una vez antes de publicar la API:
 
-Desde esta carpeta, inicia el modo de desarrollo:
+```bash
+python3.11 -m modal run vton_api.py::prepare_weights
+python3.11 -m modal deploy vton_api.py
+```
+
+La preparación descarga cerca de 2 GB del modelo VTON, los pesos de DWPose y
+unos 244 MB del parser al volumen `vton-weights`. Después del despliegue,
+configura en el `.env` de esta app `VTON_API_URL` (URL base permanente de Modal,
+sin `/try-on`) y `VTON_API_TOKEN` (el mismo valor configurado en el secreto de
+Modal). Configura esas mismas variables en Render si usas la app publicada. El
+token se envía solo desde el servidor y no debe incluirse en el navegador.
+
+El worker usa una GPU L4, se escala a cero tras 60 segundos sin solicitudes y
+acepta una inferencia concurrente a la vez. La tarifa publicada de la L4 es
+aprox. US$0.000222/s, más CPU, memoria y almacenamiento del volumen. La primera
+solicitud tras escalar a cero puede tardar varios minutos mientras inicia el
+worker y carga el modelo; las siguientes son más rápidas mientras esté activo.
+
+Para obtener una URL temporal que se actualiza al guardar cambios:
 
 ```bash
 python3.11 -m modal serve vton_api.py
-```
-
-Modal mostrará una URL temporal que se actualiza al guardar cambios. Tras
-integrar y probar el modelo VTON real, detén `modal serve` con `Ctrl+C` y
-despliega la API:
-
-```bash
-python3.11 -m modal deploy vton_api.py
 ```
 
 La URL permanente tendrá el formato
 `https://<usuario>--probador-virtual-api-fastapi-app.modal.run`; agrega
 `/try-on` al final para llamar al endpoint. La ruta exige el token guardado como
 secreto de Modal. No incluyas ese token en el JavaScript público del navegador:
-llama a esta API desde un backend propio. La simulación actual no solicita una
-GPU, aunque Modal puede cobrar por ejecutar el endpoint.
+llama a esta API desde un backend propio.
 
 Ejemplo de cliente Python (requiere `requests`). Configura `VTON_API_TOKEN` en
 el entorno del backend y sustituye la URL por la que entregue Modal:
@@ -109,7 +121,7 @@ response = requests.post(
         "garment_image_base64": image_as_base64("prenda.jpg"),
         "category": "upper_body",
     },
-    timeout=300,
+    timeout=600,
 )
 response.raise_for_status()
 result = response.json()
