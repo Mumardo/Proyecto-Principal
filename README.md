@@ -145,15 +145,14 @@ usa Supabase JS desde jsDelivr, por lo que requiere conexión a internet.
 ## API opcional con Modal (pasos 3–5)
 
 El proyecto incluye [`vton_api.py`](./Calce%20y%20Matices%20Integrado/vton_api.py),
-que monta una API FastAPI en una GPU L4 y guarda la caché del modelo en el
-volumen persistente `vton-weights`. El botón **Probador**, junto a **Catálogo**,
-usa la foto elegida en **Inicio** y permite seleccionar una prenda del catálogo.
-Solo las cuentas con sesión iniciada pueden enviar solicitudes.
+una API FastAPI ligera que no carga GPU ni modelos. El botón **Probador**, junto
+a **Catálogo**, usa la foto elegida en **Inicio** y permite seleccionar una
+prenda del catálogo. Solo las cuentas con sesión iniciada pueden enviar
+solicitudes.
 
-**Estado actual:** SDXL-Turbo es solo un checkpoint de referencia, no un modelo
-VTON. Hasta integrar la inferencia oficial de un modelo de prueba virtual, el
-endpoint devuelve la foto original con estado `simulation`; no fusiona la
-prenda.
+**Estado actual:** el endpoint valida las imágenes y devuelve la foto original
+con estado `simulation`; todavía no fusiona la prenda. Integrar un modelo VTON
+real requerirá una implementación y recursos de cómputo adicionales.
 
 ### Paso 3: preparar y configurar la API
 
@@ -199,7 +198,8 @@ Envía las imágenes de persona y prenda en Base64 junto con la categoría y el
 token Bearer. No incluyas el token en el JavaScript público del navegador; llama
 a Modal desde un backend propio. El ejemplo Python completo está en la
 [guía de Modal del subproyecto](./Calce%20y%20Matices%20Integrado/README.md#api-alternativa-de-probador-virtual-con-modal).
-Las llamadas a la GPU pueden generar costos.
+La simulación actual no solicita una GPU, aunque Modal puede cobrar por ejecutar
+el endpoint.
 
 Al iniciar, la aplicación intenta abrir la URL en Google Chrome. En VS Code,
 selecciona **Medidas: ejecutar en Chrome** en el panel **Ejecutar y depurar** y

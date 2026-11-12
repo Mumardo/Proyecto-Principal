@@ -47,12 +47,10 @@ y permite buscar una prenda del catálogo. La aplicación envía las imágenes a
 Modal a través de su backend; solo las cuentas con sesión iniciada pueden
 generar una prueba.
 
-El archivo [`vton_api.py`](./vton_api.py) prepara una API FastAPI en una GPU L4
-y monta el volumen persistente `vton-weights` en `/models`. El checkpoint
-`stabilityai/sdxl-turbo` incluido es solo un marcador para comprobar la descarga
-y caché; no es un modelo de prueba virtual. Hasta integrar la inferencia oficial
-de un modelo VTON en `load_model` y `generate`, la ruta devuelve la foto de la
-persona sin cambios y responde con `"status": "simulation"`.
+El archivo [`vton_api.py`](./vton_api.py) prepara una API FastAPI ligera, sin GPU
+ni carga de modelos. El Probador actual es una simulación: valida las imágenes y
+devuelve la foto de la persona sin cambios con `"status": "simulation"`. Para
+generar una imagen con la prenda hace falta integrar un modelo VTON real.
 
 Para ejecutarlo, instala el cliente Modal fuera de las dependencias de la app,
 con Python 3.10 o posterior. Configura tu cuenta y crea un token de acceso:
@@ -87,8 +85,8 @@ La URL permanente tendrá el formato
 `https://<usuario>--probador-virtual-api-fastapi-app.modal.run`; agrega
 `/try-on` al final para llamar al endpoint. La ruta exige el token guardado como
 secreto de Modal. No incluyas ese token en el JavaScript público del navegador:
-llama a esta API desde un backend propio. Cada llamada puede incurrir en costos
-de GPU.
+llama a esta API desde un backend propio. La simulación actual no solicita una
+GPU, aunque Modal puede cobrar por ejecutar el endpoint.
 
 Ejemplo de cliente Python (requiere `requests`). Configura `VTON_API_TOKEN` en
 el entorno del backend y sustituye la URL por la que entregue Modal:

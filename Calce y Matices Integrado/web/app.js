@@ -1209,10 +1209,10 @@ document.querySelectorAll("[data-garment-catalog]").forEach(catalog => {
 
     tryOnRequestController?.abort();
     tryOnRequestController = new AbortController();
-    const timeout = window.setTimeout(() => tryOnRequestController.abort(), 300000);
+    const timeout = window.setTimeout(() => tryOnRequestController.abort(), 60000);
     tryOnGenerateButton.disabled = true;
     tryOnResult.hidden = true;
-    tryOnStatus.textContent = "Enviando la foto y la prenda a Modal. Puede tardar unos minutos.";
+    tryOnStatus.textContent = "Preparando la simulación; puede tardar unos segundos.";
     try {
       const accessToken = await window.calceGetAccessToken?.();
       if (!accessToken) {
