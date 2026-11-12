@@ -194,6 +194,12 @@ document.querySelectorAll('form[action="/"]').forEach(form => {
     const supabaseUrl = document.querySelector('meta[name="supabase-url"]')?.content;
     const supabaseKey = document.querySelector('meta[name="supabase-publishable-key"]')?.content;
     let supabaseClient;
+    window.calceGetAccessToken = async () => {
+      if (!supabaseClient) return null;
+      const { data, error } = await supabaseClient.auth.getSession();
+      if (error) throw error;
+      return data.session?.access_token ?? null;
+    };
     let signedInUser;
     let activeUserId;
     let profileLoadedUserId;
@@ -743,55 +749,6 @@ document.querySelectorAll("[data-carousel]").forEach(carousel => {
   showCard(0);
 });
 
-const TRY_ON_SELECTION_KEY = "matices-aiuta-selected-products";
-const getStoredTryOnSelection = () => {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(TRY_ON_SELECTION_KEY) || "null");
-    if (!parsed || !Array.isArray(parsed.selected)) {
-      return { selected: [], activeId: null };
-    }
-    const selected = parsed.selected.filter(item => item && typeof item.id === "string" && typeof item.sku_id === "string");
-    const activeId = typeof parsed.activeId === "string" ? parsed.activeId : selected[0]?.id || null;
-    return { selected, activeId };
-  } catch (error) {
-    console.error("No se pudo restaurar la selección del probador.", error);
-    return { selected: [], activeId: null };
-  }
-};
-const saveTryOnSelection = (selected, activeId = null) => {
-  localStorage.setItem(
-    TRY_ON_SELECTION_KEY,
-    JSON.stringify({ selected, activeId }),
-  );
-};
-
-const updateSelectionSnapshot = (selectedItems, activeId = null) => {
-  const selection = selectedItems
-    .filter(item => item && item.dataset?.catalogId)
-    .map(item => {
-      const productId = item.dataset.catalogId;
-      const title = item.querySelector(".catalog-item-info h3")?.textContent?.trim() || productId;
-      const skuId = item.querySelector("[data-aiuta-product]")?.dataset.aiutaSkuId || productId;
-      return {
-        id: productId,
-        sku_id: skuId,
-        title,
-        brand: item.dataset.catalogBrand || "Marca",
-        store: item.dataset.catalogStore || "Catálogo",
-      };
-    });
-  const nextActiveId = activeId && selection.some(item => item.id === activeId)
-    ? activeId
-    : selection[0]?.id || null;
-  saveTryOnSelection(selection, nextActiveId);
-  return { selected: selection, activeId: nextActiveId };
-};
-
-const getActiveTryOnProduct = () => {
-  const selectionState = getStoredTryOnSelection();
-  return selectionState.selected.find(item => item.id === selectionState.activeId) || selectionState.selected[0] || null;
-};
-
 document.querySelectorAll("[data-garment-catalog]").forEach(catalog => {
   const sortSelect = catalog.querySelector("[data-catalog-sort]");
   const itemsContainer = catalog.querySelector("[data-catalog-items]");
@@ -834,10 +791,6 @@ document.querySelectorAll("[data-garment-catalog]").forEach(catalog => {
     compareButton.textContent = selected.length
       ? "Comparar"
       : "Selecciona Productos a Comparar";
-    const activeProductId = selected.length
-      ? (selectedCards.has(getStoredTryOnSelection().activeId) ? getStoredTryOnSelection().activeId : selected[0].dataset.catalogId)
-      : null;
-    updateSelectionSnapshot(selected, activeProductId);
   };
   const deselectCard = productId => {
     selectedCards.delete(productId);
@@ -1081,23 +1034,229 @@ document.querySelectorAll("[data-garment-catalog]").forEach(catalog => {
   const accountLinks = Array.from(document.querySelectorAll("[data-open-account]"));
   const stepInput = wizard.querySelector('input[name="wizard_step"]');
   const wizardForm = wizard.querySelector("[data-style-wizard-form]");
+  const tryOnLink = document.querySelector("[data-open-try-on]");
+  const tryOnPagePanel = document.getElementById("try-on-panel");
+  const tryOnPanel = document.querySelector("[data-virtual-try-on]");
+  const homePagePanel = document.getElementById("home-panel");
+  const catalogPagePanel = document.getElementById("catalog-panel");
+  const tryOnProductSearch = tryOnPanel?.querySelector("[data-vton-product-search]");
+  const tryOnProductSelect = tryOnPanel?.querySelector("[data-vton-product-select]");
+  const tryOnPersonPreview = tryOnPanel?.querySelector("[data-vton-person-preview]");
+  const tryOnPersonEmpty = tryOnPanel?.querySelector("[data-vton-person-empty]");
+  const tryOnGarmentPreview = tryOnPanel?.querySelector("[data-vton-garment-preview]");
+  const tryOnGarmentEmpty = tryOnPanel?.querySelector("[data-vton-garment-empty]");
+  const tryOnGenerateButton = tryOnPanel?.querySelector("[data-vton-generate]");
+  const tryOnStatus = tryOnPanel?.querySelector("[data-vton-status]");
+  const tryOnResult = tryOnPanel?.querySelector("[data-vton-result]");
+  const tryOnResultImage = tryOnPanel?.querySelector("[data-vton-result-image]");
+  const tryOnResultStatus = tryOnPanel?.querySelector("[data-vton-result-status]");
   const paletteStorageKey = "matices-wizard-palette";
   const rememberedPhotoEnabledKey = "matices-photo-remember-enabled";
   const rememberedPhotoDatabase = "matices-local-data";
   const rememberedPhotoStore = "photos";
-  const tryOnPhotoSessionKey = "matices-try-on-photo-session";
-  const tryOnPhotoRecordKey = "try-on-session-photo";
   const maxRememberedPhotoSize = 10 * 1024 * 1024;
+  const tryOnPhotoSessionKey = "calce-try-on-photo-key";
+  const tryOnPhotoLifetime = 60 * 60 * 1000;
   let currentPalette = [];
   let currentStep = 1;
   let selectedPhoto = null;
+  let tryOnPhotoSavePromise = Promise.resolve(true);
   let cameraStream = null;
-  let photoRestorePromise = Promise.resolve();
-  let photoPersistencePromise = Promise.resolve();
+  let tryOnPersonObjectUrl;
+  let tryOnSearchTimer;
+  let tryOnProductsController;
+  let tryOnRequestController;
+  let tryOnProductsLoaded = false;
 
   const setStatus = message => {
     status.textContent = message;
   };
+
+  const syncTryOnPhoto = () => {
+    if (tryOnPersonObjectUrl) URL.revokeObjectURL(tryOnPersonObjectUrl);
+    tryOnPersonObjectUrl = null;
+    if (!selectedPhoto) {
+      tryOnPersonPreview.hidden = true;
+      tryOnPersonPreview.removeAttribute("src");
+      tryOnPersonEmpty.hidden = false;
+      if (tryOnGenerateButton) tryOnGenerateButton.disabled = true;
+      return;
+    }
+
+    tryOnPersonObjectUrl = URL.createObjectURL(selectedPhoto);
+    tryOnPersonPreview.src = tryOnPersonObjectUrl;
+    tryOnPersonPreview.hidden = false;
+    tryOnPersonEmpty.hidden = true;
+    if (tryOnGenerateButton) {
+      tryOnGenerateButton.disabled = !tryOnProductSelect?.value;
+    }
+  };
+
+  const loadTryOnProducts = async search => {
+    tryOnProductsController?.abort();
+    tryOnProductsController = new AbortController();
+    tryOnProductSelect.disabled = true;
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "Buscando prendas…";
+    tryOnProductSelect.replaceChildren(option);
+
+    try {
+      const params = new URLSearchParams({ search });
+      const response = await fetch(`/api/vton-products?${params}`, {
+        signal: tryOnProductsController.signal,
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || `El servidor respondió HTTP ${response.status}.`);
+      }
+
+      const productOptions = (data.products || []).map(product => {
+        const productOption = document.createElement("option");
+        productOption.value = product.product_url;
+        productOption.textContent = [
+          product.store,
+          product.brand,
+          product.title,
+          `Talla ${product.size}`,
+        ].join(" · ");
+        productOption.dataset.imageUrl = product.image_url;
+        return productOption;
+      });
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = productOptions.length
+        ? "Selecciona una prenda"
+        : "No encontramos prendas para esa búsqueda";
+      tryOnProductSelect.replaceChildren(placeholder, ...productOptions);
+      tryOnProductSelect.disabled = false;
+      tryOnProductsLoaded = true;
+      tryOnProductSelect.dispatchEvent(new Event("change"));
+    } catch (error) {
+      if (error.name === "AbortError") return;
+      tryOnProductsLoaded = false;
+      const failedOption = document.createElement("option");
+      failedOption.value = "";
+      failedOption.textContent = "No se pudo cargar el catálogo";
+      tryOnProductSelect.replaceChildren(failedOption);
+      tryOnStatus.textContent = "No se pudo cargar el catálogo de prendas. Inténtalo nuevamente.";
+      console.error("No se pudieron cargar prendas para la prueba virtual.", error);
+    }
+  };
+
+  tryOnLink?.addEventListener("click", event => {
+    event.preventDefault();
+    homePagePanel.hidden = true;
+    catalogPagePanel.hidden = true;
+    tryOnPagePanel.hidden = false;
+    document.getElementById("home-link")?.removeAttribute("aria-current");
+    document.getElementById("catalog-link")?.removeAttribute("aria-current");
+    tryOnLink.setAttribute("aria-current", "page");
+    syncTryOnPhoto();
+    if (!selectedPhoto) {
+      tryOnStatus.textContent = "Vuelve a Inicio y selecciona una foto para usarla en el Probador.";
+    }
+    if (!tryOnProductsLoaded) {
+      loadTryOnProducts(tryOnProductSearch.value.trim());
+    }
+    tryOnPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  tryOnProductSearch?.addEventListener("input", () => {
+    window.clearTimeout(tryOnSearchTimer);
+    tryOnSearchTimer = window.setTimeout(
+      () => loadTryOnProducts(tryOnProductSearch.value.trim()),
+      250,
+    );
+  });
+
+  tryOnProductSelect?.addEventListener("change", () => {
+    const selectedOption = tryOnProductSelect.selectedOptions[0];
+    const imageUrl = selectedOption?.dataset.imageUrl;
+    tryOnGarmentPreview.hidden = !imageUrl;
+    tryOnGarmentEmpty.hidden = Boolean(imageUrl);
+    if (imageUrl) tryOnGarmentPreview.src = imageUrl;
+    if (tryOnGenerateButton) {
+      tryOnGenerateButton.disabled = !selectedPhoto || !tryOnProductSelect.value;
+    }
+    tryOnResult.hidden = true;
+  });
+
+  const fileAsBase64 = file => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+      const separator = dataUrl.indexOf(",");
+      if (separator < 0) {
+        reject(new Error("No se pudo codificar la foto de Inicio."));
+        return;
+      }
+      resolve(dataUrl.slice(separator + 1));
+    };
+    reader.onerror = () => reject(reader.error || new Error("No se pudo leer la foto de Inicio."));
+    reader.readAsDataURL(file);
+  });
+
+  tryOnGenerateButton?.addEventListener("click", async () => {
+    if (!selectedPhoto || !tryOnProductSelect.value) {
+      tryOnStatus.textContent = "Selecciona una foto en Inicio y una prenda del catálogo.";
+      return;
+    }
+    if (selectedPhoto.size > 10 * 1024 * 1024) {
+      tryOnStatus.textContent = "La foto debe tener un tamaño máximo de 10 MB.";
+      return;
+    }
+
+    tryOnRequestController?.abort();
+    tryOnRequestController = new AbortController();
+    const timeout = window.setTimeout(() => tryOnRequestController.abort(), 300000);
+    tryOnGenerateButton.disabled = true;
+    tryOnResult.hidden = true;
+    tryOnStatus.textContent = "Enviando la foto y la prenda a Modal. Puede tardar unos minutos.";
+    try {
+      const accessToken = await window.calceGetAccessToken?.();
+      if (!accessToken) {
+        tryOnStatus.textContent = "Inicia sesión para usar el Probador.";
+        return;
+      }
+      const personImageBase64 = await fileAsBase64(selectedPhoto);
+      const response = await fetch("/api/try-on", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          person_image_base64: personImageBase64,
+          product_url: tryOnProductSelect.value,
+        }),
+        signal: tryOnRequestController.signal,
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || `El servidor respondió HTTP ${response.status}.`);
+      }
+      if (typeof data.result_image_base64 !== "string") {
+        throw new Error("Modal no devolvió una imagen válida.");
+      }
+      tryOnResultImage.src = `data:image/jpeg;base64,${data.result_image_base64}`;
+      tryOnResultStatus.textContent = data.detail || "Prueba virtual completada.";
+      tryOnResult.hidden = false;
+      tryOnStatus.textContent = data.status === "simulation"
+        ? "Modo simulación: todavía no se ha integrado la inferencia del modelo VTON."
+        : "Prueba virtual completada.";
+    } catch (error) {
+      tryOnStatus.textContent = error.name === "AbortError"
+        ? "La solicitud tardó demasiado y se canceló. Inténtalo nuevamente."
+        : error.message || "No se pudo completar la prueba virtual.";
+      console.error("No se pudo completar la prueba virtual con Modal.", error);
+    } finally {
+      window.clearTimeout(timeout);
+      if (tryOnGenerateButton) {
+        tryOnGenerateButton.disabled = !selectedPhoto || !tryOnProductSelect.value;
+      }
+    }
+  });
 
   const openPhotoDatabase = () => new Promise((resolve, reject) => {
     const request = indexedDB.open(rememberedPhotoDatabase, 1);
@@ -1158,55 +1317,101 @@ document.querySelectorAll("[data-garment-catalog]").forEach(catalog => {
     }
   };
 
-  const saveTryOnPhoto = async file => {
-    if (!file || !file.type?.startsWith("image/")) return;
-    let sessionId = sessionStorage.getItem(tryOnPhotoSessionKey);
-    if (!sessionId) {
-      sessionId = crypto.randomUUID();
-      sessionStorage.setItem(tryOnPhotoSessionKey, sessionId);
+  const getTryOnPhotoKey = () => {
+    let key = sessionStorage.getItem(tryOnPhotoSessionKey);
+    if (!key) {
+      key = `try-on-session-${crypto.randomUUID()}`;
+      sessionStorage.setItem(tryOnPhotoSessionKey, key);
     }
-    try {
-      const database = await openPhotoDatabase();
-      try {
-        await new Promise((resolve, reject) => {
-          const transaction = database.transaction(rememberedPhotoStore, "readwrite");
-          transaction.objectStore(rememberedPhotoStore).put({
-            blob: file,
-            name: file.name,
-            type: file.type,
-            lastModified: file.lastModified,
-            sessionId,
-          }, tryOnPhotoRecordKey);
-          transaction.oncomplete = resolve;
-          transaction.onerror = () => reject(transaction.error || new Error("No se pudo preparar la foto para el probador."));
-          transaction.onabort = () => reject(transaction.error || new Error("Se canceló la preparación de la foto."));
-        });
-      } finally {
-        database.close();
-      }
-    } catch (error) {
-      console.error("No se pudo preparar la foto para el probador.", error);
-    }
+    return key;
   };
 
-  const deleteTryOnPhoto = async () => {
-    const sessionId = sessionStorage.getItem(tryOnPhotoSessionKey);
-    if (!sessionId) return;
+  const saveTryOnPhotoForSession = async file => {
+    const key = getTryOnPhotoKey();
     const database = await openPhotoDatabase();
     try {
       await new Promise((resolve, reject) => {
         const transaction = database.transaction(rememberedPhotoStore, "readwrite");
-        const store = transaction.objectStore(rememberedPhotoStore);
-        const request = store.get(tryOnPhotoRecordKey);
-        request.onsuccess = () => {
-          if (request.result?.sessionId === sessionId) {
-            store.delete(tryOnPhotoRecordKey);
-          }
-        };
-        request.onerror = () => reject(request.error || new Error("No se pudo consultar la foto temporal."));
+        transaction.objectStore(rememberedPhotoStore).put({
+          blob: file,
+          name: file.name,
+          type: file.type,
+          lastModified: file.lastModified,
+          expiresAt: Date.now() + tryOnPhotoLifetime,
+        }, key);
         transaction.oncomplete = resolve;
-        transaction.onerror = () => reject(transaction.error || new Error("No se pudo eliminar la foto temporal."));
-        transaction.onabort = () => reject(transaction.error || new Error("Se canceló la eliminación de la foto temporal."));
+        transaction.onerror = () => reject(
+          transaction.error || new Error("No se pudo conservar la foto para el Probador.")
+        );
+        transaction.onabort = () => reject(
+          transaction.error || new Error("Se canceló la preparación de la foto para el Probador.")
+        );
+      });
+    } finally {
+      database.close();
+    }
+  };
+
+  const loadTryOnPhotoForSession = async () => {
+    const key = sessionStorage.getItem(tryOnPhotoSessionKey);
+    if (!key) return null;
+    const database = await openPhotoDatabase();
+    try {
+      return await new Promise((resolve, reject) => {
+        const transaction = database.transaction(rememberedPhotoStore, "readonly");
+        const request = transaction.objectStore(rememberedPhotoStore).get(key);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(
+          request.error || new Error("No se pudo recuperar la foto para el Probador.")
+        );
+      });
+    } finally {
+      database.close();
+    }
+  };
+
+  const removeTryOnPhotoForSession = async () => {
+    const key = sessionStorage.getItem(tryOnPhotoSessionKey);
+    sessionStorage.removeItem(tryOnPhotoSessionKey);
+    if (!key) return;
+    const database = await openPhotoDatabase();
+    try {
+      await new Promise((resolve, reject) => {
+        const transaction = database.transaction(rememberedPhotoStore, "readwrite");
+        transaction.objectStore(rememberedPhotoStore).delete(key);
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(
+          transaction.error || new Error("No se pudo eliminar la foto temporal.")
+        );
+      });
+    } finally {
+      database.close();
+    }
+  };
+
+  const cleanExpiredTryOnPhotos = async () => {
+    const database = await openPhotoDatabase();
+    try {
+      await new Promise((resolve, reject) => {
+        const transaction = database.transaction(rememberedPhotoStore, "readwrite");
+        const cursorRequest = transaction.objectStore(rememberedPhotoStore).openCursor();
+        cursorRequest.onsuccess = () => {
+          const cursor = cursorRequest.result;
+          if (!cursor) return;
+          const value = cursor.value;
+          if (
+            typeof cursor.key === "string"
+            && cursor.key.startsWith("try-on-session-")
+            && Number(value?.expiresAt) <= Date.now()
+          ) {
+            cursor.delete();
+          }
+          cursor.continue();
+        };
+        transaction.oncomplete = resolve;
+        transaction.onerror = () => reject(
+          transaction.error || new Error("No se pudieron limpiar fotos temporales.")
+        );
       });
     } finally {
       database.close();
@@ -1242,6 +1447,16 @@ document.querySelectorAll("[data-garment-catalog]").forEach(catalog => {
 
   const showSelectedPhoto = (file, persist = true, resetAnalysis = true) => {
     selectedPhoto = file;
+    tryOnPhotoSavePromise = saveTryOnPhotoForSession(file)
+      .then(() => true)
+      .catch(error => {
+        console.error("No se pudo conservar la foto para el Probador.", error);
+        if (rememberStatus) {
+          rememberStatus.textContent = "La foto no se pudo preparar para el Probador en esta sesión.";
+        }
+        return false;
+      });
+    syncTryOnPhoto();
     nextButton.disabled = true;
     if (resetAnalysis) {
       currentPalette = [];
@@ -1303,6 +1518,10 @@ document.querySelectorAll("[data-garment-catalog]").forEach(catalog => {
   const removeSelectedPhoto = () => {
     window.dispatchEvent(new CustomEvent("matices:photo-removed"));
     selectedPhoto = null;
+    syncTryOnPhoto();
+    removeTryOnPhotoForSession().catch(error => {
+      console.error("No se pudo eliminar la foto temporal del Probador.", error);
+    });
     if (fileInput) fileInput.value = "";
     if (preview) preview.removeAttribute("src");
     if (previewBox) previewBox.hidden = true;
@@ -1321,9 +1540,6 @@ document.querySelectorAll("[data-garment-catalog]").forEach(catalog => {
     }
     try {
       localStorage.removeItem(rememberedPhotoEnabledKey);
-      photoPersistencePromise = deleteTryOnPhoto().catch(error => {
-        console.error("No se pudo eliminar la foto temporal del probador.", error);
-      });
       deleteRememberedPhoto().then(() => {
         if (rememberStatus) rememberStatus.textContent = "Foto eliminada del navegador.";
       }).catch(error => {
@@ -1641,27 +1857,6 @@ document.querySelectorAll("[data-garment-catalog]").forEach(catalog => {
     showSelectedPhoto(file);
   });
   removePhotoButton?.addEventListener("click", removeSelectedPhoto);
-  document.getElementById("try-on-link")?.addEventListener("click", async event => {
-    const targetHref = event.currentTarget?.getAttribute("href") || "/?view=try-on";
-    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-      return;
-    }
-    event.preventDefault();
-    try {
-      await photoRestorePromise;
-      await photoPersistencePromise;
-      if (selectedPhoto) {
-        await saveTryOnPhoto(selectedPhoto);
-      }
-    } catch (error) {
-      console.error("No se pudo compartir la foto de Inicio con el probador.", error);
-    } finally {
-      const url = new URL(targetHref, window.location.origin);
-      url.searchParams.set("view", "try-on");
-      window.location.assign(url.toString());
-    }
-  });
-
   cameraButton?.addEventListener("click", async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
       setStatus("La cámara requiere un navegador compatible y una conexión segura (HTTPS o localhost). Puedes elegir una foto del dispositivo.");
@@ -1803,12 +1998,38 @@ document.querySelectorAll("[data-garment-catalog]").forEach(catalog => {
     field.addEventListener("input", updateSizeSummary);
   });
 
-  wizardForm?.addEventListener("submit", () => {
-    if (stepInput) stepInput.value = "3";
+  let preparingWizardSubmission = false;
+  let resubmittingWizardForm = false;
+  wizardForm?.addEventListener("submit", async event => {
+    if (resubmittingWizardForm) {
+      resubmittingWizardForm = false;
+      if (stepInput) stepInput.value = "3";
+      try {
+        sessionStorage.setItem(paletteStorageKey, JSON.stringify(currentPalette));
+      } catch (error) {
+        console.error("No se pudo conservar la paleta durante la sesión.", error);
+      }
+      return;
+    }
+
+    event.preventDefault();
+    if (preparingWizardSubmission) return;
+    preparingWizardSubmission = true;
+    const submitter = event.submitter;
+    const photoSaved = await tryOnPhotoSavePromise;
+    if (!photoSaved && rememberStatus) {
+      rememberStatus.textContent = "La foto no se conservará al navegar al catálogo; vuelve a Inicio para probarla.";
+    }
     try {
-      sessionStorage.setItem(paletteStorageKey, JSON.stringify(currentPalette));
+      resubmittingWizardForm = true;
+      if (submitter) wizardForm.requestSubmit(submitter);
+      else wizardForm.requestSubmit();
     } catch (error) {
-      console.error("No se pudo conservar la paleta durante la sesión.", error);
+      resubmittingWizardForm = false;
+      setStatus("No se pudo continuar al catálogo. Inténtalo nuevamente.");
+      console.error("No se pudo enviar el formulario del asistente.", error);
+    } finally {
+      preparingWizardSubmission = false;
     }
   });
 
@@ -1866,641 +2087,22 @@ document.querySelectorAll("[data-garment-catalog]").forEach(catalog => {
   if (new URLSearchParams(window.location.search).get("view") === "account") {
     showAccount();
   }
-  photoRestorePromise = restoreRememberedPhoto();
+  cleanExpiredTryOnPhotos()
+    .then(loadTryOnPhotoForSession)
+    .then(savedPhoto => {
+      if (!savedPhoto?.blob) return;
+      if (savedPhoto.expiresAt <= Date.now()) {
+        return removeTryOnPhotoForSession();
+      }
+      const file = new File([savedPhoto.blob], savedPhoto.name || "foto-de-inicio", {
+        type: savedPhoto.type || savedPhoto.blob.type || "image/jpeg",
+        lastModified: savedPhoto.lastModified || Date.now(),
+      });
+      showSelectedPhoto(file, false, false);
+    })
+    .catch(error => {
+      console.error("No se pudo recuperar la foto para el Probador.", error);
+    });
+  restoreRememberedPhoto();
   window.addEventListener("pagehide", stopCamera);
 })();
-
-document.querySelectorAll("[data-aiuta-try-on]").forEach(panel => {
-  const imageInput = panel.querySelector("[data-aiuta-image]");
-  const sourcePhotoPanel = panel.querySelector("[data-aiuta-source-photo]");
-  const sourcePhotoPreview = panel.querySelector("[data-aiuta-source-preview]");
-  const sourcePhotoCaption = panel.querySelector("[data-aiuta-source-caption]");
-  const productSelect = panel.querySelector("[data-aiuta-product-select]");
-  const selectionList = panel.querySelector("[data-aiuta-selection-list]");
-  const skuInput = panel.querySelector("[data-aiuta-sku]");
-  const catalogInput = panel.querySelector("[data-aiuta-catalog]");
-  const generateButton = panel.querySelector("[data-aiuta-generate]");
-  const status = panel.querySelector("[data-aiuta-status]");
-  const results = panel.querySelector("[data-aiuta-results]");
-  let supabaseClient;
-  let isAuthenticated = true;
-  let isGenerating = false;
-  let currentUserId;
-  let sourcePhoto;
-  let sourcePhotoUrl;
-  let autoGenerateTimer;
-  const selectedProducts = new Map();
-
-  if (!imageInput || !skuInput || !status || !results) {
-    return;
-  }
-
-  const inferProductCategory = rawText => {
-    const normalized = (rawText || "").toLowerCase();
-    if (/(blazer|camisa|chaqueta|sueter|polera|cardigan|top|sudadera|jersey|pullover|remera|camiseta|hoodie|buzo|abrigo|vestido)/.test(normalized)) {
-      return "superior";
-    }
-    return "inferior";
-  };
-  const parseCatalogOptions = () => {
-    if (!productSelect) return [];
-    return Array.from(productSelect.options).filter(option => option.value).map(option => ({
-      id: option.value,
-      label: option.textContent.trim(),
-      imageUrl: option.dataset.imageUrl || "",
-      category: option.dataset.category || inferProductCategory(option.textContent),
-    }));
-  };
-  const renderProductPicker = () => {
-    if (!productSelect || !selectionList) return;
-    const groups = new Map();
-    parseCatalogOptions().forEach(item => {
-      if (!groups.has(item.category)) groups.set(item.category, []);
-      groups.get(item.category).push(item);
-    });
-    const groupsMarkup = Array.from(groups.entries()).map(([category, items]) => {
-      const title = category === "superior" ? "Prendas superiores" : "Prendas inferiores";
-      const buttons = items.map(item => {
-        const isActive = item.id === skuInput.value.trim();
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "aiuta-picker-item" + (isActive ? " is-active" : "");
-        button.dataset.aiutaSelectProduct = item.id;
-        button.title = item.label;
-        button.setAttribute("aria-pressed", String(isActive));
-        const image = document.createElement("img");
-        image.src = item.imageUrl || "";
-        image.alt = item.label;
-        image.loading = "lazy";
-        const name = document.createElement("span");
-        name.textContent = "";
-        button.append(image, name);
-        return button;
-      });
-      const group = document.createElement("div");
-      group.className = "aiuta-picker-group";
-      const heading = document.createElement("h4");
-      heading.textContent = title;
-      const grid = document.createElement("div");
-      grid.className = "aiuta-picker-grid";
-      grid.append(...buttons);
-      group.append(heading, grid);
-      return group;
-    });
-    const pickerGroups = panel.querySelector("[data-aiuta-picker-groups]");
-    if (pickerGroups) pickerGroups.replaceChildren(...groupsMarkup);
-  };
-  const pickerGroups = panel.querySelector("[data-aiuta-picker-groups]");
-  if (pickerGroups) {
-    pickerGroups.addEventListener("click", event => {
-      const selectedProduct = event.target.closest("[data-aiuta-select-product]");
-      if (!selectedProduct) return;
-      const productId = selectedProduct.dataset.aiutaSelectProduct;
-      if (!productId) return;
-      if (productSelect) productSelect.value = productId;
-      skuInput.value = productId;
-      updateSelectionFromSku(productId);
-      scheduleAutoGenerate();
-    });
-  }
-  const persistSelectedProducts = () => {
-    const items = Array.from(selectedProducts.entries()).map(([productId, productLabel]) => ({
-      id: productId,
-      sku_id: productId,
-      title: productLabel,
-      store: "Catálogo",
-      image_url: parseCatalogOptions().find(item => item.id === productId)?.imageUrl || "",
-    }));
-    saveTryOnSelection(items, skuInput.value.trim() || items[0]?.id || null);
-  };
-  const hydrateSelectionFromCatalog = () => {
-    selectedProducts.clear();
-    const storedSelection = getStoredTryOnSelection();
-    storedSelection.selected.forEach(item => {
-      if (item?.id && item?.sku_id) {
-        const option = parseCatalogOptions().find(candidate => candidate.id === item.id);
-        selectedProducts.set(item.id, option?.label || item.title || item.sku_id);
-      }
-    });
-    const activeProductId = skuInput.value.trim() || storedSelection.activeId || null;
-    if (activeProductId) {
-      const activeLabel = selectedProducts.get(activeProductId)
-        || productSelect?.options?.[productSelect.selectedIndex]?.textContent?.trim()
-        || activeProductId;
-      selectedProducts.set(activeProductId, activeLabel);
-      skuInput.value = activeProductId;
-      if (productSelect) productSelect.value = activeProductId;
-    }
-    renderSelectionList();
-  };
-  const setStatus = message => {
-    status.textContent = message;
-  };
-  const renderSelectionList = () => {
-    if (!selectionList) return;
-    const items = Array.from(selectedProducts.entries());
-    if (!items.length) {
-      selectionList.innerHTML = '<p class="aiuta-selection-empty">No hay prendas seleccionadas aún.</p>';
-      persistSelectedProducts();
-      return;
-    }
-    const activeProductId = skuInput.value.trim();
-    const groups = new Map([
-      ["superior", []],
-      ["inferior", []],
-    ]);
-    items.forEach(([productId, productLabel]) => {
-      const productOption = parseCatalogOptions().find(option => option.id === productId);
-      const category = productOption?.category || inferProductCategory(productLabel);
-      groups.get(category)?.push([productId, productLabel, productOption?.imageUrl || ""]);
-    });
-    const renderGroup = (category, list) => {
-      const group = document.createElement("div");
-      group.className = "aiuta-selection-group";
-      const heading = document.createElement("h4");
-      heading.textContent = category === "superior" ? "Superiores" : "Inferiores";
-      const chips = list.map(([productId, productLabel, imageUrl]) => {
-        const isActive = productId === activeProductId;
-        const productButton = document.createElement("button");
-        productButton.type = "button";
-        productButton.className = "aiuta-selection-item" + (isActive ? " is-active" : "");
-        productButton.dataset.aiutaSelectProduct = productId;
-        productButton.setAttribute("aria-pressed", String(isActive));
-        productButton.title = productLabel;
-        const image = document.createElement("img");
-        image.src = imageUrl || "";
-        image.alt = productLabel;
-        image.loading = "lazy";
-        productButton.append(image);
-        const removeButton = document.createElement("button");
-        removeButton.type = "button";
-        removeButton.className = "aiuta-selection-remove";
-        removeButton.dataset.aiutaRemoveSelection = productId;
-        removeButton.setAttribute("aria-label", `Quitar ${productLabel} de la selección del carrito`);
-        removeButton.textContent = "×";
-        const wrapper = document.createElement("div");
-        wrapper.className = "aiuta-selection-chip";
-        wrapper.append(productButton, removeButton);
-        return wrapper;
-      });
-      group.append(heading, ...chips);
-      return group;
-    };
-    const groupsList = Array.from(groups.entries()).filter(([, list]) => list.length).map(([category, list]) => renderGroup(category, list));
-    selectionList.replaceChildren(...groupsList);
-    persistSelectedProducts();
-  };
-  const updateSelectionFromSku = productId => {
-    if (!productId) {
-      if (selectionList) selectionList.innerHTML = '<p class="aiuta-selection-empty">No hay prendas seleccionadas aún.</p>';
-      persistSelectedProducts();
-      return;
-    }
-    const option = parseCatalogOptions().find(candidate => candidate.id === productId)
-      || Array.from(productSelect?.options || []).find(candidate => candidate.value === productId);
-    const label = option?.label || skuInput.value.trim() || "Prenda seleccionada";
-    selectedProducts.set(productId, label);
-    persistSelectedProducts();
-    renderSelectionList();
-    renderProductPicker();
-  };
-  const createGuestDemoOperation = (skuId, catalogName, file) => {
-    const imageUrl = file && typeof file === "object" && file instanceof File
-      ? URL.createObjectURL(file)
-      : "";
-    return {
-      id: `guest-${Date.now()}`,
-      sku_id: skuId || "demo-sku",
-      sku_catalog_name: catalogName || "main",
-      status: "SUCCESS",
-      error: null,
-      generated_images: imageUrl ? [{ url: imageUrl }] : [],
-    };
-  };
-  const updateGenerateButton = () => {
-    if (!generateButton) return;
-    generateButton.disabled = isGenerating;
-    generateButton.textContent = isGenerating ? "Generando…" : "Probar prenda";
-  };
-  const readFileAsBase64 = file => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
-    reader.onerror = () => reject(reader.error || new Error("No se pudo leer la foto del probador."));
-    reader.readAsDataURL(file);
-  });
-  const triggerGenerate = async () => {
-    const file = sourcePhoto || imageInput.files?.[0];
-    const skuId = skuInput.value.trim();
-    const catalogName = catalogInput?.value.trim() || "main";
-    if (!file || !skuId) {
-      setStatus("Selecciona una foto y una prenda del catálogo antes de probarla.");
-      return;
-    }
-    if (typeof file.size !== "number" || file.size === 0) {
-      setStatus("La imagen seleccionada está vacía.");
-      return;
-    }
-    try {
-      await validateTryOnPhoto(file);
-    } catch {
-      sourcePhoto = null;
-      if (imageInput) imageInput.value = "";
-      sourcePhotoPanel.hidden = true;
-      setStatus("Selecciona una imagen válida para continuar.");
-      return;
-    }
-
-    isGenerating = true;
-    updateGenerateButton();
-    let imagePath;
-    try {
-      if (!supabaseClient || !currentUserId) {
-        setStatus("Aiuta está iniciando la prueba virtual en modo sin sesión…");
-        const imageData = await readFileAsBase64(file);
-        const result = await invokeAiuta({
-          action: "start",
-          image_data: imageData,
-          sku_id: skuId,
-          sku_catalog_name: catalogName || "main",
-          guest: true,
-        });
-        const operation = result.operation;
-        if (!operation?.id) {
-          throw new Error("La Edge Function no devolvió el registro de la operación.");
-        }
-        await pollOperation(operation.id);
-        return;
-      }
-      setStatus("Subiendo la foto de forma temporal a Supabase Storage…");
-      const extensionByType = {
-        "image/jpeg": "jpg",
-        "image/png": "png",
-        "image/webp": "webp",
-      };
-      imagePath = `${currentUserId}/${crypto.randomUUID()}.${extensionByType[file.type]}`;
-      const { error: uploadError } = await supabaseClient.storage
-        .from("aiuta-try-on-uploads")
-        .upload(imagePath, file, {
-          cacheControl: "60",
-          contentType: file.type,
-          upsert: false,
-        });
-      if (uploadError) throw uploadError;
-      setStatus("Aiuta está iniciando la prueba y registrando la operación…");
-      const result = await invokeAiuta({
-        action: "start",
-        image_path: imagePath,
-        sku_id: skuId,
-        sku_catalog_name: catalogName || "main",
-      });
-      const operation = result.operation;
-      if (!operation?.id) {
-        throw new Error("La Edge Function no devolvió el registro de la operación.");
-      }
-      await pollOperation(operation.id);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "No se pudo generar la prueba virtual.");
-      console.error("No se pudo generar la prueba virtual con Aiuta.", error);
-    } finally {
-      if (imagePath && supabaseClient) {
-        const { error } = await supabaseClient.storage
-          .from("aiuta-try-on-uploads")
-          .remove([imagePath]);
-        if (error) console.error("No se pudo eliminar la foto temporal de Supabase Storage.", error);
-      }
-      isGenerating = false;
-      updateGenerateButton();
-    }
-  };
-  const validateTryOnPhoto = file => new Promise((resolve, reject) => {
-    if (!file || typeof file !== "object" || typeof file.size !== "number") {
-      reject(new Error("Selecciona una imagen válida para el probador."));
-      return;
-    }
-    if (file.size === 0) {
-      reject(new Error("La imagen seleccionada está vacía."));
-      return;
-    }
-    const objectUrl = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      if (!image.width || !image.height) {
-        reject(new Error("La imagen seleccionada no es válida."));
-        return;
-      }
-      resolve();
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error("La imagen seleccionada no es válida."));
-    };
-    image.src = objectUrl;
-  });
-  const showSourcePhoto = (file, isFromHome) => {
-    validateTryOnPhoto(file)
-      .then(() => {
-        sourcePhoto = file;
-        if (sourcePhotoUrl) URL.revokeObjectURL(sourcePhotoUrl);
-        sourcePhotoUrl = URL.createObjectURL(file);
-        sourcePhotoPreview.src = sourcePhotoUrl;
-        sourcePhotoPanel.hidden = false;
-        sourcePhotoCaption.textContent = isFromHome
-          ? "Se usará la foto seleccionada en Inicio."
-          : "Se usará esta foto para la prueba virtual.";
-      })
-      .catch(() => {
-        sourcePhoto = null;
-        if (imageInput) imageInput.value = "";
-        sourcePhotoPanel.hidden = true;
-        setStatus("Selecciona una imagen válida para continuar.");
-      });
-  };
-  const loadSourcePhoto = async () => {
-    try {
-      const database = await new Promise((resolve, reject) => {
-        const request = indexedDB.open("matices-local-data", 1);
-        request.onupgradeneeded = () => {
-          request.result.createObjectStore("photos");
-        };
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error || new Error("No se pudo abrir la foto de Inicio."));
-        request.onblocked = () => reject(new Error("El almacenamiento local de fotos está bloqueado."));
-      });
-      let photo;
-      try {
-        photo = await new Promise((resolve, reject) => {
-          const transaction = database.transaction("photos", "readonly");
-          const store = transaction.objectStore("photos");
-          const sessionId = sessionStorage.getItem("matices-try-on-photo-session");
-          if (sessionId) {
-            const request = store.get("try-on-session-photo");
-            request.onsuccess = () => {
-              if (request.result?.sessionId === sessionId) {
-                resolve(request.result);
-                return;
-              }
-              loadRememberedPhoto(store).then(resolve, reject);
-            };
-            request.onerror = () => reject(request.error || new Error("No se pudo recuperar la foto de Inicio."));
-            return;
-          }
-          loadRememberedPhoto(store).then(resolve, reject);
-        });
-      } finally {
-        database.close();
-      }
-      if (!photo?.blob) return;
-      const file = new File([photo.blob], photo.name || "foto-de-inicio", {
-        type: photo.type || photo.blob.type || "image/jpeg",
-        lastModified: photo.lastModified || Date.now(),
-      });
-      showSourcePhoto(file, true);
-      setStatus("Encontramos la foto seleccionada en Inicio; la usaremos para la prueba.");
-    } catch (error) {
-      setStatus("No se pudo recuperar la foto de Inicio. Puedes elegir otra foto.");
-      console.error("No se pudo reutilizar la foto de Inicio en el probador.", error);
-    }
-  };
-  const loadRememberedPhoto = store => new Promise((resolve, reject) => {
-    if (localStorage.getItem("matices-photo-remember-enabled") !== "true") {
-      resolve(null);
-      return;
-    }
-    const request = store.get("selected-photo");
-    request.onsuccess = () => resolve(request.result || null);
-    request.onerror = () => reject(request.error || new Error("No se pudo recuperar la foto recordada."));
-  });
-  const aiutaEdgeFunctionCall = 'supabaseClient.functions.invoke("aiuta-try-on"';
-  const invokeAiuta = async body => {
-    const client = supabaseClient || window.calceSupabaseClient;
-    if (!client) {
-      throw new Error("No hay conexión con Supabase para iniciar la prueba virtual.");
-    }
-    const { data, error } = await client.functions.invoke("aiuta-try-on", { body });
-    if (error) {
-      let message = error.message || "No se pudo contactar la Edge Function de Aiuta.";
-      const unauthorized = /unauthorized|401|jwt|token|sesion|session/i.test(message);
-      if (error.context instanceof Response) {
-        const payload = await error.context.clone().json().catch(() => null);
-        if (typeof payload?.error === "string") message = payload.error;
-      }
-      if (unauthorized && !currentUserId) {
-        throw new Error(
-          "La función de Aiuta está bloqueando llamadas anónimas. Solución: desactiva verify_jwt en Supabase Edge Function y vuelve a desplegar la función."
-        );
-      }
-      throw new Error(message);
-    }
-    if (!data || typeof data !== "object") {
-      throw new Error("La Edge Function devolvió una respuesta inválida.");
-    }
-    return data;
-  };
-
-  const renderOperation = operation => {
-    const card = document.createElement("article");
-    const heading = document.createElement("h4");
-    const operationStatus = document.createElement("p");
-    heading.textContent = `${operation.sku_id || "Prenda"} · ${operation.sku_catalog_name || "main"}`;
-    operationStatus.textContent = `Estado: ${operation.status}`;
-    card.append(heading, operationStatus);
-    if (operation.error) {
-      const error = document.createElement("p");
-      error.textContent = operation.error;
-      card.append(error);
-    }
-    const images = Array.isArray(operation.generated_images)
-      ? operation.generated_images
-      : [];
-    const imageElements = images.flatMap(item => {
-      if (typeof item?.url !== "string") return [];
-      let imageUrl;
-      try {
-        imageUrl = new URL(item.url);
-      } catch {
-        return [];
-      }
-      if (imageUrl.protocol !== "https:") return [];
-      const image = document.createElement("img");
-      image.className = "aiuta-generated-image";
-      image.alt = "Resultado de prueba virtual generado por Aiuta";
-      image.loading = "lazy";
-      image.src = imageUrl.href;
-      return [image];
-    });
-    card.append(...imageElements);
-    return card;
-  };
-  const renderOperations = operations => {
-    if (!operations.length) {
-      const empty = document.createElement("p");
-      empty.textContent = "Tus pruebas virtuales aparecerán aquí y quedarán guardadas en tu cuenta.";
-      results.replaceChildren(empty);
-      return;
-    }
-    results.replaceChildren(...operations.map(renderOperation));
-  };
-  const wait = milliseconds => new Promise(resolve => {
-    window.setTimeout(resolve, milliseconds);
-  });
-  const pollOperation = async operationId => {
-    const deadline = Date.now() + 180000;
-    while (Date.now() < deadline) {
-      await wait(2000);
-      const result = await invokeAiuta({ action: "status", id: operationId });
-      const operation = result.operation;
-      if (!operation || typeof operation.status !== "string") {
-        throw new Error("La Edge Function no devolvió el estado de la operación.");
-      }
-      renderOperations([operation]);
-      if (operation.status === "SUCCESS") {
-        setStatus("Prueba virtual lista. El resultado quedó guardado en tu cuenta.");
-        return;
-      }
-      if (["FAILED", "CANCELLED", "ABORTED"].includes(operation.status)) {
-        throw new Error(operation.error || "Aiuta no pudo generar la imagen.");
-      }
-      setStatus("Aiuta está generando la prueba virtual. El estado se guarda en tu cuenta…");
-    }
-    throw new Error("La operación sigue en curso. Puedes volver a intentarlo más tarde.");
-  };
-
-  const loadHistory = async () => {
-    if (!currentUserId) {
-      results.replaceChildren();
-      return;
-    }
-    try {
-      const result = await invokeAiuta({ action: "list" });
-      if (Array.isArray(result.operations)) renderOperations(result.operations);
-    } catch (error) {
-      setStatus(error instanceof Error
-        ? `No se pudo cargar el historial de pruebas: ${error.message}`
-        : "No se pudo cargar el historial de pruebas.");
-      console.error("No se pudo cargar el historial de Aiuta.", error);
-    }
-  };
-  const setSession = session => {
-    const userId = session?.user?.id || null;
-    isAuthenticated = true;
-    updateGenerateButton();
-    if (!userId) {
-      currentUserId = undefined;
-      results.replaceChildren();
-      setStatus("Modo prueba sin sesión habilitado. Puedes probar prendas sin guardar historial.");
-      return;
-    }
-    if (userId === currentUserId) return;
-    currentUserId = userId;
-    setStatus("Cargando tus pruebas virtuales guardadas…");
-    loadHistory();
-  };
-  const connectSupabase = client => {
-    if (!client || supabaseClient) return;
-    supabaseClient = client;
-    supabaseClient.auth.onAuthStateChange((_event, session) => setSession(session));
-    supabaseClient.auth.getSession()
-      .then(({ data, error }) => {
-        if (error) throw error;
-        setSession(data.session);
-      })
-      .catch(error => {
-        setStatus(`No se pudo comprobar tu sesión: ${error.message}`);
-        console.error("No se pudo comprobar la sesión para Aiuta.", error);
-      });
-  };
-
-  window.addEventListener("calce:supabase-ready", event => {
-    connectSupabase(event.detail?.client);
-  }, { once: true });
-  connectSupabase(window.calceSupabaseClient);
-
-  hydrateSelectionFromCatalog();
-  renderProductPicker();
-
-  const scheduleAutoGenerate = () => {
-    if (!sourcePhoto && !imageInput.files?.[0]) {
-      return;
-    }
-    if (!skuInput.value.trim() || !isAuthenticated) {
-      return;
-    }
-    window.clearTimeout(autoGenerateTimer);
-    autoGenerateTimer = window.setTimeout(() => {
-      if (!isGenerating) triggerGenerate();
-    }, 250);
-  };
-
-  imageInput.addEventListener("change", () => {
-    const file = imageInput.files?.[0];
-    if (file) showSourcePhoto(file, false);
-    scheduleAutoGenerate();
-  });
-  loadSourcePhoto();
-
-  document.addEventListener("click", event => {
-    const button = event.target.closest("[data-aiuta-product]");
-    if (!button) return;
-    const productId = button.dataset.aiutaSkuId || "";
-    if (productId) {
-      const detail = button.closest("[data-catalog-card]");
-      const productLabel = detail?.querySelector(".catalog-item-info h3")?.textContent?.trim() || productId;
-      const selection = getStoredTryOnSelection();
-      const nextSelection = selection.selected.filter(item => item.id !== productId);
-      nextSelection.push({ id: productId, sku_id: productId, title: productLabel, store: detail?.dataset.catalogStore || "Catálogo" });
-      saveTryOnSelection(nextSelection, productId);
-    }
-    const url = new URL(window.location.href);
-    url.searchParams.set("view", "try-on");
-    url.searchParams.set("sku_id", productId);
-    window.location.assign(url);
-  });
-
-  if (generateButton) {
-    generateButton.addEventListener("click", triggerGenerate);
-  }
-
-  if (productSelect) {
-    productSelect.addEventListener("change", () => {
-      const productId = productSelect.value.trim();
-      if (!productId) return;
-      skuInput.value = productId;
-      updateSelectionFromSku(productId);
-      scheduleAutoGenerate();
-      setStatus("Prenda seleccionada del catálogo. Puedes cambiarla sin quitarla de tu carrito de prendas.");
-    });
-  }
-
-  if (selectionList) {
-    selectionList.addEventListener("click", event => {
-      const selectedProduct = event.target.closest("[data-aiuta-select-product]");
-      if (selectedProduct) {
-        const productId = selectedProduct.dataset.aiutaSelectProduct;
-        if (!productId) return;
-        if (productSelect) productSelect.value = productId;
-        skuInput.value = productId;
-        updateSelectionFromSku(productId);
-        scheduleAutoGenerate();
-        return;
-      }
-      const removeButton = event.target.closest("[data-aiuta-remove-selection]");
-      if (!removeButton) return;
-      const productId = removeButton.dataset.aiutaRemoveSelection;
-      if (!productId) return;
-      selectedProducts.delete(productId);
-      if (skuInput.value.trim() === productId) {
-        skuInput.value = "";
-        if (productSelect) productSelect.value = "";
-      }
-      persistSelectedProducts();
-      renderSelectionList();
-      renderProductPicker();
-      setStatus("Prenda quitada del carrito de prueba.");
-    });
-  }
-
-  if (skuInput.value.trim()) {
-    scheduleAutoGenerate();
-  }
-});

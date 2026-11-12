@@ -11,3 +11,7 @@ services:
     envVars:
       - key: SUPABASE_PUBLISHABLE_KEY
         sync: false
+      - key: VTON_API_URL
+        sync: false
+      - key: VTON_API_TOKEN
+        sync: false
